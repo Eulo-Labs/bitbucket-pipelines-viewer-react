@@ -192,26 +192,30 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
         {/* Metadata */}
         {rawStep && (
           <div style={{ marginBottom: "16px" }}>
-            {rawStep.deployment && (
-              <MetadataRow label="Deployment" value={rawStep.deployment} />
+            {Boolean(rawStep.deployment) && (
+              <MetadataRow
+                label="Deployment"
+                value={String(rawStep.deployment)}
+              />
             )}
-            {rawStep.trigger && (
-              <MetadataRow label="Trigger" value={rawStep.trigger} />
+            {Boolean(rawStep.trigger) && (
+              <MetadataRow label="Trigger" value={String(rawStep.trigger)} />
             )}
-            {rawStep.image && (
+            {Boolean(rawStep.image) && (
               <MetadataRow
                 label="Image"
                 value={
                   typeof rawStep.image === "string"
                     ? rawStep.image
-                    : rawStep.image?.name || JSON.stringify(rawStep.image)
+                    : (rawStep.image as { name?: string })?.name ||
+                      JSON.stringify(rawStep.image)
                 }
               />
             )}
-            {rawStep.caches && rawStep.caches.length > 0 && (
+            {Array.isArray(rawStep.caches) && rawStep.caches.length > 0 && (
               <MetadataRow label="Caches" value={rawStep.caches.join(", ")} />
             )}
-            {rawStep.services && rawStep.services.length > 0 && (
+            {Array.isArray(rawStep.services) && rawStep.services.length > 0 && (
               <MetadataRow
                 label="Services"
                 value={rawStep.services.join(", ")}
@@ -223,7 +227,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
                 value={rawStep.oidc ? "Enabled" : "Disabled"}
               />
             )}
-            {rawStep["after-script"] && (
+            {Boolean(rawStep["after-script"]) && (
               <MetadataRow label="After Script" value="Yes" />
             )}
           </div>
