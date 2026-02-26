@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parsePipelines,
   transformStepsToGraph,
@@ -8,7 +8,9 @@ import {
 
 describe("parsePipelines", () => {
   it("should return empty array for invalid YAML", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(parsePipelines("invalid: yaml: :")).toEqual([]);
+    consoleSpy.mockRestore();
   });
 
   it("should return empty array when pipelines key is missing", () => {
