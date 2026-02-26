@@ -1,5 +1,5 @@
 set -e
-pnpm audit || true
+pnpm audit
 pnpm lint-staged
 pnpm lint
 pnpm typecheck

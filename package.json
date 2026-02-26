@@ -89,5 +89,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/eulolab/bitbucket-pipelines-viewer-react"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch": "^10.2.3"
+    }
   }
 }
