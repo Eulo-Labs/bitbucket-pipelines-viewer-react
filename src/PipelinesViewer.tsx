@@ -190,10 +190,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
                       style={{
                         fontSize: "11px",
                         fontWeight: 600,
-                        color: token(
-                          "color.text.accent.blue",
-                          "#0055CC",
-                        ),
+                        color: token("color.text.accent.blue", "#0055CC"),
                         textTransform: "uppercase",
                         letterSpacing: "0.5px",
                       }}

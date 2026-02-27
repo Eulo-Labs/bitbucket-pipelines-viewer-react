@@ -8,7 +8,7 @@ const cloudflareAnalyticsPlugin = (): Plugin => ({
     if (process.env.NODE_ENV === "production") {
       return html.replace(
         "</body>",
-        `  <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "7e2479cb4fb5482599d88ce842209429"}'></script><!-- End Cloudflare Web Analytics -->\n  </body>`
+        `  <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "7e2479cb4fb5482599d88ce842209429"}'></script><!-- End Cloudflare Web Analytics -->\n  </body>`,
       );
     }
     return html;

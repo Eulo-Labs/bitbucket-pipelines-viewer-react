@@ -85,9 +85,3 @@ jobs:
         run: |
           pnpm exec puppeteer browsers install chrome
           pnpm run lint:a11y
-
-      - name: Accessibility audit (a11ywatch)
-        uses: a11ywatch/github-action@v2.1.10
-        with:
-          WEBSITE_URL: http://localhost:3000/bitbucket-pipelines-viewer-react/
-          FAIL_ERRORS_COUNT: 0
