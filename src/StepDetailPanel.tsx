@@ -4,7 +4,7 @@ import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import yamlLang from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import jsYaml from "js-yaml";
-import { StepNodeData } from "./utils";
+import { StepNodeData } from "./types";
 
 SyntaxHighlighter.registerLanguage("yaml", yamlLang);
 

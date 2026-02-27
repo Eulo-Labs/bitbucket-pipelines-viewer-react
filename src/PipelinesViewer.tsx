@@ -19,14 +19,13 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import "./PipelinesViewer.css";
 import { token } from "@atlaskit/tokens";
+import { parsePipelines, transformStepsToGraph } from "./utils";
 import {
-  parsePipelines,
-  transformStepsToGraph,
   PipelineDefinition,
   StepNodeData,
   PipelineVariable,
   EdgeData,
-} from "./utils";
+} from "./types";
 import StepDetailPanel from "./StepDetailPanel";
 import FullSourceOverlay from "./FullSourceOverlay";
 import VariablesPanel from "./VariablesPanel";
@@ -154,6 +153,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
       nodesToUpdate: Node[],
       currentMapPipelines: PipelineDefinition[],
       currentSelectedId: string | null,
+      variables: PipelineVariable[],
     ) => {
       return nodesToUpdate.map((n) => {
         if (n.id === "start") {
@@ -166,43 +166,82 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
                   style={{
                     position: "absolute",
                     left: "50%",
-                    bottom: "calc(100% + 8px)",
+                    bottom: "calc(100% + 12px)",
                     transform: "translateX(-50%)",
                     whiteSpace: "nowrap",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    background: token("elevation.surface", "#fff"),
-                    padding: "2px 6px",
-                    borderRadius: "3px",
                   }}
                 >
-                  <select
-                    aria-label="Start condition"
-                    className="nodrag nopan"
-                    value={currentSelectedId || ""}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      setSelectedPipelineId(e.target.value);
-                    }}
+                  <div
                     style={{
-                      padding: "2px 4px",
-                      borderRadius: "3px",
-                      border: `1px solid ${token("color.border.input", "#dfe1e6")}`,
-                      background: token("color.background.input", "#fafbfc"),
-                      fontSize: "11px",
-                      color: token("color.text", "#172B4D"),
-                      cursor: "pointer",
-                      minWidth: "120px",
-                      outline: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: token(
+                        "color.background.accent.blue.subtlest",
+                        "#E9F2FF",
+                      ),
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: `1px solid ${token("color.border.accent.blue", "#85B8FF")}`,
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
                     }}
                   >
-                    {currentMapPipelines.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: token(
+                          "color.text.accent.blue",
+                          "#0055CC",
+                        ),
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Start Condition
+                    </span>
+                    <select
+                      aria-label="Start condition"
+                      className="nodrag nopan"
+                      value={currentSelectedId || ""}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedPipelineId(e.target.value);
+                      }}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        border: `1px solid ${token("color.border.input", "#dfe1e6")}`,
+                        background: token("elevation.surface", "#fff"),
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        color: token("color.text", "#172B4D"),
+                        cursor: "pointer",
+                        minWidth: "140px",
+                        outline: "none",
+                        height: "28px",
+                      }}
+                    >
+                      {currentMapPipelines.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {variables.length > 0 && (
+                    <div
+                      className="nodrag nopan"
+                      style={{
+                        position: "absolute",
+                        left: "calc(100% + 10px)",
+                        top: 0,
+                        zIndex: 10,
+                      }}
+                    >
+                      <VariablesPanel variables={variables} />
+                    </div>
+                  )}
                 </div>
               ),
             },
@@ -269,7 +308,14 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
 
         const { nodes: newNodes, edges: newEdges } =
           transformStepsToGraph(defaultPipe);
-        setNodes(applyStartNodeDropdown(newNodes, parsed, pipeId));
+        setNodes(
+          applyStartNodeDropdown(
+            newNodes,
+            parsed,
+            pipeId,
+            defaultPipe.variables ?? [],
+          ),
+        );
         setEdges(newEdges);
       } else {
         setSelectedPipelineId(null);
@@ -328,7 +374,14 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
       if (pipeline) {
         const { nodes: newNodes, edges: newEdges } =
           transformStepsToGraph(pipeline);
-        setNodes(applyStartNodeDropdown(newNodes, pipelines, selectedPipelineId));
+        setNodes(
+          applyStartNodeDropdown(
+            newNodes,
+            pipelines,
+            selectedPipelineId,
+            pipeline.variables ?? [],
+          ),
+        );
         setEdges(newEdges);
       }
     }
@@ -388,13 +441,6 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     );
   }, [animatingStage, setEdges]);
 
-  // Resolve variables for the currently selected pipeline
-  const currentVariables: PipelineVariable[] = useMemo(() => {
-    if (!selectedPipelineId || pipelines.length === 0) return [];
-    const pipeline = pipelines.find((p) => p.id === selectedPipelineId);
-    return pipeline?.variables ?? [];
-  }, [selectedPipelineId, pipelines]);
-
   const currentOptions = useMemo(() => {
     if (!selectedPipelineId || pipelines.length === 0) return null;
     const pipeline = pipelines.find((p) => p.id === selectedPipelineId);
@@ -447,8 +493,6 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
         background: token("elevation.surface", "#fff"),
       }}
     >
-
-
       <div style={{ flex: 1, position: "relative" }}>
         <ReactFlow
           nodes={nodes}
@@ -492,30 +536,29 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
               {animatingStage !== null ? <StopIcon /> : <PlayIcon />}
             </ControlButton>
           </Controls>
-          {(currentVariables.length > 0 ||
-            (currentOptions && Object.keys(currentOptions).length > 0) ||
+          {((currentOptions && Object.keys(currentOptions).length > 0) ||
             currentGlobalImage) && (
-              <Panel position="top-center" style={{ marginTop: "10px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  {currentGlobalImage && (
-                    <ImagePanel image={currentGlobalImage} />
-                  )}
-                  {currentOptions && Object.keys(currentOptions).length > 0 && (
-                    <OptionsPanel options={currentOptions} />
-                  )}
-                  {currentVariables.length > 0 && (
-                    <VariablesPanel variables={currentVariables} />
-                  )}
-                </div>
-              </Panel>
-            )}
+            <Panel
+              position="top-left"
+              style={{ marginTop: "10px", marginLeft: "10px" }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                {currentGlobalImage && (
+                  <ImagePanel image={currentGlobalImage} defaultExpanded />
+                )}
+                {currentOptions && Object.keys(currentOptions).length > 0 && (
+                  <OptionsPanel options={currentOptions} />
+                )}
+              </div>
+            </Panel>
+          )}
         </ReactFlow>
         {selectedNode && selectedNode.data && (
           <StepDetailPanel

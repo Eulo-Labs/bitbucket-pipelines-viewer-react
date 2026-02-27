@@ -3,8 +3,8 @@ import {
   parsePipelines,
   transformStepsToGraph,
   getLayoutedElements,
-  PipelineDefinition,
 } from "./utils";
+import { PipelineDefinition } from "./types";
 
 describe("parsePipelines", () => {
   it("should return empty array for invalid YAML", () => {

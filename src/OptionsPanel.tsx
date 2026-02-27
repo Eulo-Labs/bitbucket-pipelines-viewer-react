@@ -39,7 +39,7 @@ const OptionsPanel: React.FC<OptionsPanelProps> = ({ options }) => {
         padding: "10px 14px",
         fontSize: "12px",
         color: token("color.text", "#172B4D"),
-        width: isExpanded ? "260px" : "auto",
+        width: "auto",
         minWidth: "120px",
         boxShadow: `0 2px 8px ${token("elevation.shadow.overflow", "rgba(9, 30, 66, 0.13)")}`,
       }}

@@ -3,6 +3,7 @@ import { token } from "@atlaskit/tokens";
 
 interface ImagePanelProps {
   image: string;
+  defaultExpanded?: boolean;
 }
 
 const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
@@ -24,8 +25,11 @@ const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
   </svg>
 );
 
-const ImagePanel: React.FC<ImagePanelProps> = ({ image }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const ImagePanel: React.FC<ImagePanelProps> = ({
+  image,
+  defaultExpanded = false,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
     <div
@@ -37,8 +41,8 @@ const ImagePanel: React.FC<ImagePanelProps> = ({ image }) => {
         padding: "10px 14px",
         fontSize: "12px",
         color: token("color.text", "#172B4D"),
-        width: isExpanded ? "260px" : "auto",
-        minWidth: "120px",
+        width: "fit-content",
+        maxWidth: "300px",
         boxShadow: `0 2px 8px ${token("elevation.shadow.overflow", "rgba(9, 30, 66, 0.13)")}`,
       }}
     >
@@ -85,7 +89,10 @@ const ImagePanel: React.FC<ImagePanelProps> = ({ image }) => {
           style={{
             fontFamily: "monospace",
             fontSize: "11px",
-            background: token("color.background.neutral", "rgba(0, 0, 0, 0.05)"),
+            background: token(
+              "color.background.neutral",
+              "rgba(0, 0, 0, 0.05)",
+            ),
             padding: "4px 8px",
             borderRadius: "4px",
             wordBreak: "break-all",

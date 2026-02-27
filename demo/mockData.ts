@@ -614,12 +614,12 @@ pipelines:
                 - test-results/**
           - step:
               name: E2E Tests — Tablet 📱
-              size: 2x
+              size: 8x
               script:
                 - npm run test:e2e -- --browser=$BROWSER --viewport=tablet
           - step:
               name: E2E Tests — Mobile 📲
-              size: 2x
+              size: 16x
               script:
                 - npm run test:e2e -- --browser=$BROWSER --viewport=mobile
       - step:

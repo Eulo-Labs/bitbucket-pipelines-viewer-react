@@ -3,61 +3,14 @@ import dagre from "dagre";
 import React from "react";
 import { Node, Edge, Position } from "reactflow";
 import { token } from "@atlaskit/tokens";
-
-/** A variable declaration within a pipeline, optionally with a default value and allowed values. */
-export interface PipelineVariable {
-  name: string;
-  default?: string;
-  allowedValues?: string[];
-  "allowed-values"?: string[];
-}
-
-/** A single step (or parallel/stage wrapper) within a Bitbucket Pipeline definition. */
-export interface PipelineStep {
-  name?: string;
-  trigger?: "manual" | "automatic" | string;
-  image?: string | { name: string };
-  script?: unknown[];
-  pipe?: string;
-  variables?: PipelineVariable[];
-  step?: PipelineStep;
-  parallel?: PipelineStep[];
-  [key: string]: unknown;
-}
-
-/** A fully parsed pipeline with its steps, trigger info, variables, and global options. */
-export interface PipelineDefinition {
-  id: string;
-  name: string;
-  steps: PipelineStep[];
-  variables?: PipelineVariable[];
-  options?: Record<string, unknown>;
-  image?: string;
-  triggerType?: "default" | "branch" | "pull-request" | "tag" | "custom";
-  triggerPattern?: string;
-  schedules?: { cron: string }[];
-}
-
-/** Data attached to each React Flow node representing a pipeline step. */
-export interface StepNodeData {
-  label: React.ReactNode;
-  rawStep?: PipelineStep;
-  yamlSnippet?: string;
-  stepType:
-  | "start"
-  | "end"
-  | "parallel"
-  | "pipe"
-  | "script"
-  | "step"
-  | "trigger";
-  isManual?: boolean;
-}
-
-/** Data attached to each React Flow edge, tracking the pipeline stage index. */
-export interface EdgeData {
-  stage: number;
-}
+import {
+  PipelineVariable,
+  PipelineStep,
+  PipelineDefinition,
+  StepNodeData,
+  EdgeData,
+  YamlDoc,
+} from "./types";
 
 const deriveStepType = (step: PipelineStep): StepNodeData["stepType"] => {
   if (step.script) {
@@ -71,19 +24,6 @@ const deriveStepType = (step: PipelineStep): StepNodeData["stepType"] => {
   }
   return "step";
 };
-
-export interface YamlDoc {
-  pipelines?: {
-    default?: PipelineStep[];
-    branches?: Record<string, PipelineStep[]>;
-    "pull-requests"?: Record<string, PipelineStep[]>;
-    custom?: Record<string, PipelineStep[]>;
-    tags?: Record<string, PipelineStep[]>;
-  };
-  options?: Record<string, unknown>;
-  image?: string | { name: string };
-  triggers?: Array<{ schedule?: { pipeline?: string; cron?: string } }>;
-}
 
 /**
  * Parse a raw `bitbucket-pipelines.yml` string into an array of {@link PipelineDefinition} objects.
@@ -364,6 +304,7 @@ const buildNodeLabel = (
   name: string,
   image: unknown,
   isManual?: boolean,
+  size?: string,
 ): React.ReactNode => {
   const imageStr = resolveImageString(image);
   return React.createElement(
@@ -375,8 +316,30 @@ const buildNodeLabel = (
         alignItems: "stretch",
         width: "100%",
         gap: "4px",
+        position: "relative" as const,
       },
     },
+    size &&
+      React.createElement(
+        "span",
+        {
+          style: {
+            position: "absolute" as const,
+            top: "-6px",
+            right: "-8px",
+            fontSize: "9px",
+            lineHeight: "14px",
+            background: "#DCDFE4",
+            color: "#222",
+            padding: "0 5px",
+            borderRadius: "4px",
+            fontWeight: "bold",
+            whiteSpace: "nowrap",
+            border: `1px solid ${token("color.border", "#DFE1E6")}`,
+          },
+        },
+        size,
+      ),
     React.createElement(
       "div",
       {
@@ -388,45 +351,45 @@ const buildNodeLabel = (
         },
       },
       isManual &&
-      React.createElement(
-        "span",
-        {
-          style: {
-            fontSize: "9px",
-            background: token(
-              "color.background.accent.blue.subtle",
-              "#E9F2FF",
-            ),
-            color: token("color.text.accent.blue", "#0052CC"),
-            padding: "2px 4px",
-            borderRadius: "10px",
-            border: `1px solid ${token("color.border.accent.blue", "#0052CC")}`,
-            fontWeight: "bold",
-            textTransform: "uppercase",
-            whiteSpace: "nowrap",
+        React.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "9px",
+              background: token(
+                "color.background.accent.blue.subtle",
+                "#E9F2FF",
+              ),
+              color: token("color.text.accent.blue", "#0052CC"),
+              padding: "2px 4px",
+              borderRadius: "10px",
+              border: `1px solid ${token("color.border.accent.blue", "#0052CC")}`,
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            },
           },
-        },
-        "Manual",
-      ),
+          "Manual",
+        ),
       React.createElement("div", { style: { fontWeight: "500" } }, name),
     ),
     imageStr &&
-    React.createElement(
-      "div",
-      {
-        style: {
-          fontSize: "9px",
-          color: token("color.text.subtle", "#626F86"),
-          textAlign: "left",
-          fontFamily: "monospace",
-          lineHeight: "1.2",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap" as const,
+      React.createElement(
+        "div",
+        {
+          style: {
+            fontSize: "9px",
+            color: token("color.text.subtle", "#626F86"),
+            textAlign: "center",
+            fontFamily: "monospace",
+            lineHeight: "1.2",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap" as const,
+          },
         },
-      },
-      `image: ${imageStr}`,
-    ),
+        imageStr,
+      ),
   );
 };
 
@@ -476,13 +439,18 @@ export const transformStepsToGraph = (
 
   let previousNodeIds: string[] = [startNodeId];
 
-  // Recursively unwrap steps that are referenced via YAML anchors
   const unwrapStep = (step: PipelineStep): PipelineStep => {
-    let current = step;
-    while (current.step) {
+    const merged: PipelineStep = {};
+    let current: PipelineStep | undefined = step;
+    while (current) {
+      for (const key of Object.keys(current)) {
+        if (key !== "step" && merged[key] === undefined) {
+          (merged as Record<string, unknown>)[key] = current[key];
+        }
+      }
       current = current.step;
     }
-    return current;
+    return merged;
   };
 
   const processStep = (step: PipelineStep) => {
@@ -503,6 +471,7 @@ export const transformStepsToGraph = (
               subStep.name || "Parallel Step",
               subStep.image,
               isManual,
+              subStep.size as string | undefined,
             ),
             rawStep: subStep,
             stepType,
@@ -565,6 +534,7 @@ export const transformStepsToGraph = (
             actualStep.name || "Step",
             actualStep.image,
             isManual,
+            actualStep.size as string | undefined,
           ),
           rawStep: actualStep,
           stepType,
