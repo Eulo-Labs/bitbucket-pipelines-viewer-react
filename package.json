@@ -96,7 +96,8 @@
   },
   "pnpm": {
     "overrides": {
-      "minimatch": "^10.2.3"
+      "minimatch": "^10.2.3",
+      "serve>ajv": ">=8.18.0"
     }
   }
 }
