@@ -62,4 +62,32 @@ jobs:
         run: pnpm run typecheck
 
       - name: Build
-        run: pnpm run build
+        run: |
+          pnpm run build
+          pnpm run build:demo
+
+      - name: Cache Puppeteer browsers
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-puppeteer-
+
+      - name: Serve demo for a11y tests
+        run: |
+          mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
+          cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
+          pnpm exec serve tmp-serve -l 3000 &
+          sleep 5
+
+      - name: Accessibility tests (pa11y-ci)
+        run: |
+          pnpm exec puppeteer browsers install chrome
+          pnpm run lint:a11y
+
+      - name: Accessibility audit (a11ywatch)
+        uses: a11ywatch/github-action@v2.1.10
+        with:
+          WEBSITE_URL: http://localhost:3000/bitbucket-pipelines-viewer-react/
+          FAIL_ERRORS_COUNT: 0

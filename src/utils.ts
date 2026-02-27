@@ -44,13 +44,13 @@ export interface StepNodeData {
   rawStep?: PipelineStep;
   yamlSnippet?: string;
   stepType:
-    | "start"
-    | "end"
-    | "parallel"
-    | "pipe"
-    | "script"
-    | "step"
-    | "trigger";
+  | "start"
+  | "end"
+  | "parallel"
+  | "pipe"
+  | "script"
+  | "step"
+  | "trigger";
   isManual?: boolean;
 }
 
@@ -388,44 +388,45 @@ const buildNodeLabel = (
         },
       },
       isManual &&
-        React.createElement(
-          "span",
-          {
-            style: {
-              fontSize: "10px",
-              background: token(
-                "color.background.accent.blue.subtle",
-                "#E9F2FF",
-              ),
-              color: token("color.text.accent.blue", "#0052CC"),
-              padding: "2px 6px",
-              borderRadius: "10px",
-              border: `1px solid ${token("color.border.accent.blue", "#0052CC")}`,
-              fontWeight: "bold",
-              textTransform: "uppercase",
-            },
-          },
-          "Manual",
-        ),
-      React.createElement("div", { style: { fontWeight: "500" } }, name),
-    ),
-    imageStr &&
       React.createElement(
-        "div",
+        "span",
         {
           style: {
             fontSize: "9px",
-            opacity: 0.7,
-            textAlign: "left",
-            fontFamily: "monospace",
-            lineHeight: "1.2",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap" as const,
+            background: token(
+              "color.background.accent.blue.subtle",
+              "#E9F2FF",
+            ),
+            color: token("color.text.accent.blue", "#0052CC"),
+            padding: "2px 4px",
+            borderRadius: "10px",
+            border: `1px solid ${token("color.border.accent.blue", "#0052CC")}`,
+            fontWeight: "bold",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
           },
         },
-        `image: ${imageStr}`,
+        "Manual",
       ),
+      React.createElement("div", { style: { fontWeight: "500" } }, name),
+    ),
+    imageStr &&
+    React.createElement(
+      "div",
+      {
+        style: {
+          fontSize: "9px",
+          color: token("color.text.subtle", "#626F86"),
+          textAlign: "left",
+          fontFamily: "monospace",
+          lineHeight: "1.2",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap" as const,
+        },
+      },
+      `image: ${imageStr}`,
+    ),
   );
 };
 
@@ -447,90 +448,49 @@ export const transformStepsToGraph = (
   let nodeIdCounter = 0;
   let stageCounter = 0;
 
-  // Start condition / Trigger Node
+  // Start node (simple dot)
   const startNodeId = "start";
-
-  const getTriggerLabel = () => {
-    const parts: string[] = [];
-    switch (pipeline.triggerType) {
-      case "default":
-        parts.push("Main Pipeline");
-        break;
-      case "branch":
-        parts.push(`Branch: ${pipeline.triggerPattern}`);
-        break;
-      case "pull-request":
-        parts.push(`PR: ${pipeline.triggerPattern}`);
-        break;
-      case "tag":
-        parts.push(`Tag: ${pipeline.triggerPattern}`);
-        break;
-      case "custom":
-        parts.push(`Custom: ${pipeline.triggerPattern}`);
-        break;
-    }
-
-    if (pipeline.schedules && pipeline.schedules.length > 0) {
-      parts.push(`(Scheduled: ${pipeline.schedules[0].cron})`);
-    }
-
-    return React.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "2px",
-        },
-      },
-      React.createElement(
-        "div",
-        { style: { fontWeight: "600", fontSize: "11px" } },
-        parts[0],
-      ),
-      parts[1] &&
-        React.createElement(
-          "div",
-          { style: { fontSize: "10px", opacity: 0.8 } },
-          parts[1],
-        ),
-    );
-  };
 
   nodes.push({
     id: startNodeId,
     data: {
-      label: getTriggerLabel(),
-      stepType: "trigger",
+      label: "",
+      stepType: "start",
     } as StepNodeData,
     position: { x: 0, y: 0 },
     type: "input",
+    focusable: false,
     style: {
       background: token("color.background.neutral.bold", "#444"),
-      color: token("color.text.inverse", "#fff"),
       border: "none",
-      borderRadius: "16px",
-      padding: "6px 12px",
-      minWidth: 100,
+      borderRadius: "50%",
+      width: 24,
+      height: 24,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      zIndex: 1,
+      padding: 0,
+      minWidth: "24px",
     },
   });
 
   let previousNodeIds: string[] = [startNodeId];
+
+  // Recursively unwrap steps that are referenced via YAML anchors
+  const unwrapStep = (step: PipelineStep): PipelineStep => {
+    let current = step;
+    while (current.step) {
+      current = current.step;
+    }
+    return current;
+  };
 
   const processStep = (step: PipelineStep) => {
     if (step.parallel) {
       // Parallel step
       const currentParallelIds: string[] = [];
       step.parallel.forEach((subStepItem: PipelineStep) => {
-        let subStep = subStepItem;
-        if (subStepItem.step) {
-          subStep = subStepItem.step;
-        }
+        const subStep = unwrapStep(subStepItem);
 
         const nodeId = `step-${nodeIdCounter++}`;
         const stepType = deriveStepType(subStep);
@@ -592,10 +552,7 @@ export const transformStepsToGraph = (
       previousNodeIds = currentParallelIds;
       stageCounter++;
     } else {
-      let actualStep = step;
-      if (step.step) {
-        actualStep = step.step;
-      }
+      const actualStep = unwrapStep(step);
 
       const nodeId = `step-${nodeIdCounter++}`;
       const stepType = deriveStepType(actualStep);
@@ -676,6 +633,7 @@ export const transformStepsToGraph = (
     } as StepNodeData,
     position: { x: 0, y: 0 },
     type: "output",
+    ariaLabel: "Pipeline end",
     style: {
       background: token("color.background.neutral", "#EBECF0"),
       border: `2px solid ${token("color.background.neutral.bold", "#444")}`,

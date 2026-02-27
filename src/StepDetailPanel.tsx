@@ -42,8 +42,8 @@ const stepTypeBadgeColors: Record<
     text: token("color.text.success", "#006644"),
   },
   trigger: {
-    bg: token("color.background.discovery", "#EAE6FF"),
-    text: token("color.text.discovery", "#403294"),
+    bg: token("color.background.neutral", "#F4F5F7"),
+    text: token("color.text.subtle", "#42526E"),
   },
 };
 

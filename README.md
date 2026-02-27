@@ -3,6 +3,8 @@
 [![CI](https://github.com/eulolab/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml/badge.svg)](https://github.com/eulolab/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/bitbucket-pipelines-viewer-react.svg)](https://www.npmjs.com/package/bitbucket-pipelines-viewer-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![WCAG 2.2 AA](https://a11ybadges.com/badge?text=WCAG_2.2_AA&badgeColor=green)
+![a11y tested](https://a11ybadges.com/badge?text=a11y_tested&badgeColor=green&logo=check-square)
 
 Interactive React component for visualizing **bitbucket-pipelines.yml** configurations as flow graphs.
 

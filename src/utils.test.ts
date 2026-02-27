@@ -253,7 +253,7 @@ describe("transformStepsToGraph", () => {
     expect(stages).toEqual([0, 1, 2]);
   });
 
-  it("should include trigger info in start node", () => {
+  it("should have a start dot node", () => {
     const pipeline: PipelineDefinition = {
       id: "branch-main",
       name: "Branch: main",
@@ -264,7 +264,7 @@ describe("transformStepsToGraph", () => {
     const { nodes } = transformStepsToGraph(pipeline);
     const startNode = nodes.find((n) => n.id === "start");
     expect(startNode).toBeDefined();
-    expect(startNode!.data.stepType).toBe("trigger");
+    expect(startNode!.data.stepType).toBe("start");
   });
 });
 

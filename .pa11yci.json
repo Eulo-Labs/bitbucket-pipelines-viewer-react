@@ -1,0 +1,21 @@
+{
+    "defaults": {
+        "timeout": 50000,
+        "concurrency": 1,
+        "chromeLaunchConfig": {
+            "args": [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage"
+            ]
+        },
+        "runners": [
+            "axe",
+            "htmlcs"
+        ],
+        "standard": "WCAG2AA"
+    },
+    "urls": [
+        "http://localhost:3000/bitbucket-pipelines-viewer-react/"
+    ]
+}

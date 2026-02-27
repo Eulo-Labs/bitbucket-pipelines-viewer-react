@@ -319,17 +319,6 @@ definitions:
         - step: *security-scan
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Triggers — custom scheduled pipelines
-# ─────────────────────────────────────────────────────────────────────────────
-triggers:
-  - schedule:
-      cron: "0 2 * * 1"             # Every Monday at 2 AM UTC
-      pipeline: custom.nightly-regression
-  - schedule:
-      cron: "0 6 * * *"             # Every day at 6 AM UTC
-      pipeline: custom.dependency-audit
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Pipeline Variables (used by referenced steps)
 # ─────────────────────────────────────────────────────────────────────────────
 # These are referenced via $VAR_NAME in scripts; defined in Bitbucket settings
@@ -726,8 +715,8 @@ pipelines:
                 LOCAL_PATH: docs`;
 
 export const MOCK_DATA = {
-  comprehensive: {
-    name: "Comprehensive",
+  default: {
+    name: "Default",
     content: MOCK_COMPREHENSIVE,
   },
   "merge-checks": { name: "Merge Checks", content: MOCK_MERGE_CHECKS },

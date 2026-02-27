@@ -7,7 +7,7 @@ import { MOCK_DATA } from "./mockData";
 
 const App = () => {
   const [selectedMockKey, setSelectedMockKey] =
-    useState<keyof typeof MOCK_DATA>("comprehensive");
+    useState<keyof typeof MOCK_DATA>("default");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [customYaml, setCustomYaml] = useState<string>("");
   const [useCustom, setUseCustom] = useState(false);
@@ -81,6 +81,7 @@ const App = () => {
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <label style={{ fontSize: "13px", fontWeight: 500 }}>Theme:</label>
           <select
+            aria-label="Theme"
             value={theme}
             onChange={(e) =>
               handleThemeChange(e.target.value as "light" | "dark")
@@ -104,6 +105,7 @@ const App = () => {
             Sample File:
           </label>
           <select
+            aria-label="Sample file"
             value={selectedMockKey}
             onChange={(e) => {
               setSelectedMockKey(e.target.value as keyof typeof MOCK_DATA);
@@ -176,6 +178,7 @@ const App = () => {
             ref={fileInputRef}
             style={{ display: "none" }}
             accept=".yml,.yaml"
+            aria-label="Upload YAML file"
             onChange={handleFileUpload}
           />
         </div>

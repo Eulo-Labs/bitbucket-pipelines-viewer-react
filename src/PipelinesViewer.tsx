@@ -143,15 +143,81 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     null,
   );
   const containerRef = useRef<HTMLDivElement>(null);
+  const hasAutoPlayedRef = useRef(false);
 
   // Staged edge animation state
   const [animatingStage, setAnimatingStage] = useState<number | null>(null);
   const animationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const applyStartNodeDropdown = useCallback(
+    (
+      nodesToUpdate: Node[],
+      currentMapPipelines: PipelineDefinition[],
+      currentSelectedId: string | null,
+    ) => {
+      return nodesToUpdate.map((n) => {
+        if (n.id === "start") {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              label: (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    bottom: "calc(100% + 8px)",
+                    transform: "translateX(-50%)",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: token("elevation.surface", "#fff"),
+                    padding: "2px 6px",
+                    borderRadius: "3px",
+                  }}
+                >
+                  <select
+                    aria-label="Start condition"
+                    className="nodrag nopan"
+                    value={currentSelectedId || ""}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setSelectedPipelineId(e.target.value);
+                    }}
+                    style={{
+                      padding: "2px 4px",
+                      borderRadius: "3px",
+                      border: `1px solid ${token("color.border.input", "#dfe1e6")}`,
+                      background: token("color.background.input", "#fafbfc"),
+                      fontSize: "11px",
+                      color: token("color.text", "#172B4D"),
+                      cursor: "pointer",
+                      minWidth: "120px",
+                      outline: "none",
+                    }}
+                  >
+                    {currentMapPipelines.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+            },
+          };
+        }
+        return n;
+      });
+    },
+    [setSelectedPipelineId],
+  );
+
   // Automatically fit view when entering/exiting fullscreen
   useEffect(() => {
     const timer = setTimeout(() => {
-      fitView({ duration: 400, padding: 0.2 });
+      fitView({ duration: 400, padding: 0.4 });
     }, 300);
     return () => clearTimeout(timer);
   }, [isFullscreen, fitView]);
@@ -191,6 +257,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
 
   // Parse content and initialise graph
   useEffect(() => {
+    hasAutoPlayedRef.current = false;
     try {
       const parsed = parsePipelines(content);
       setPipelines(parsed);
@@ -202,7 +269,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
 
         const { nodes: newNodes, edges: newEdges } =
           transformStepsToGraph(defaultPipe);
-        setNodes(newNodes);
+        setNodes(applyStartNodeDropdown(newNodes, parsed, pipeId));
         setEdges(newEdges);
       } else {
         setSelectedPipelineId(null);
@@ -215,7 +282,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
         err instanceof Error ? err.message : "Failed to parse pipeline YAML";
       onError?.(msg);
     }
-  }, [content, setNodes, setEdges, onError]);
+  }, [content, setNodes, setEdges, onError, applyStartNodeDropdown]);
 
   // --- Staged animation logic ---
   const maxStage = useMemo(() => {
@@ -239,7 +306,20 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     stopAnimation();
     if (maxStage < 0) return;
     setAnimatingStage(0);
+    hasAutoPlayedRef.current = true;
   }, [maxStage, stopAnimation]);
+
+  // Auto-play animation once on initial load
+  useEffect(() => {
+    if (!hasAutoPlayedRef.current && maxStage >= 0) {
+      const timer = setTimeout(() => {
+        if (!hasAutoPlayedRef.current) {
+          startAnimation();
+        }
+      }, 1000); // Delay to allow fitView to complete
+      return () => clearTimeout(timer);
+    }
+  }, [maxStage, startAnimation]);
 
   useEffect(() => {
     // Re-transform graph when user selects a different pipeline from the dropdown
@@ -248,7 +328,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
       if (pipeline) {
         const { nodes: newNodes, edges: newEdges } =
           transformStepsToGraph(pipeline);
-        setNodes(newNodes);
+        setNodes(applyStartNodeDropdown(newNodes, pipelines, selectedPipelineId));
         setEdges(newEdges);
       }
     }
@@ -263,6 +343,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     setEdges,
     stopAnimation,
     setSelectedNode,
+    applyStartNodeDropdown,
   ]);
 
   // Advance the animation stage on a timer
@@ -366,51 +447,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
         background: token("elevation.surface", "#fff"),
       }}
     >
-      <div
-        style={{
-          padding: "8px 24px",
-          borderBottom: `1px solid ${token("color.border", "#ebecf0")}`,
-          background: token("elevation.surface", "#fff"),
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          zIndex: 10,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h3
-              style={{
-                margin: 0,
-                color: token("color.text.subtle", "#6B778C"),
-                fontSize: "14px",
-              }}
-            >
-              Start Condition:
-            </h3>
-            <select
-              value={selectedPipelineId || ""}
-              onChange={(e) => setSelectedPipelineId(e.target.value)}
-              style={{
-                padding: "2px 10px",
-                borderRadius: "3px",
-                border: `1px solid ${token("color.border.input", "#dfe1e6")}`,
-                background: token("color.background.input", "#fafbfc"),
-                fontSize: "14px",
-                color: token("color.text", "#172B4D"),
-                cursor: "pointer",
-                minWidth: "150px",
-              }}
-            >
-              {pipelines.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
+
 
       <div style={{ flex: 1, position: "relative" }}>
         <ReactFlow
@@ -420,7 +457,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
           fitView
-          fitViewOptions={{ padding: 0.2, includeHiddenNodes: false }}
+          fitViewOptions={{ padding: 0.4, includeHiddenNodes: false }}
           defaultEdgeOptions={{ type: "step" }}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -458,27 +495,27 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
           {(currentVariables.length > 0 ||
             (currentOptions && Object.keys(currentOptions).length > 0) ||
             currentGlobalImage) && (
-            <Panel position="top-left">
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                  alignItems: "stretch",
-                }}
-              >
-                {currentGlobalImage && (
-                  <ImagePanel image={currentGlobalImage} />
-                )}
-                {currentOptions && Object.keys(currentOptions).length > 0 && (
-                  <OptionsPanel options={currentOptions} />
-                )}
-                {currentVariables.length > 0 && (
-                  <VariablesPanel variables={currentVariables} />
-                )}
-              </div>
-            </Panel>
-          )}
+              <Panel position="top-center" style={{ marginTop: "10px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    gap: "12px",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {currentGlobalImage && (
+                    <ImagePanel image={currentGlobalImage} />
+                  )}
+                  {currentOptions && Object.keys(currentOptions).length > 0 && (
+                    <OptionsPanel options={currentOptions} />
+                  )}
+                  {currentVariables.length > 0 && (
+                    <VariablesPanel variables={currentVariables} />
+                  )}
+                </div>
+              </Panel>
+            )}
         </ReactFlow>
         {selectedNode && selectedNode.data && (
           <StepDetailPanel
