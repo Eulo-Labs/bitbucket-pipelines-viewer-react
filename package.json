@@ -32,7 +32,9 @@
     "lint": "eslint src",
     "lint:a11y": "pa11y-ci",
     "fixstyle": "prettier '**/*.{ts,tsx,js,jsx,json,md,yaml,yml}' --write",
-    "prepare": "husky"
+    "prepare": "husky",
+    "publish-patch": "pnpm version patch && git push --follow-tags",
+    "publish-minor": "pnpm version minor && git push --follow-tags"
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,md,yaml,yml}": [
