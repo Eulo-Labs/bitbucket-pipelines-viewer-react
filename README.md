@@ -1,7 +1,7 @@
 # bitbucket-pipelines-viewer-react
 
 [![CI](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml/badge.svg)](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/bitbucket-pipelines-viewer-react.svg)](https://www.npmjs.com/package/bitbucket-pipelines-viewer-react)
+[![npm version](https://img.shields.io/npm/v/@eulolabs/bitbucket-pipelines-viewer-react.svg)](https://www.npmjs.com/package/@eulolabs/bitbucket-pipelines-viewer-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-green.svg)
 ![a11y tested](https://img.shields.io/badge/a11y-tested-green.svg)
@@ -22,21 +22,21 @@ Interactive React component for visualizing **bitbucket-pipelines.yml** configur
 
 ```bash
 # Using npm
-npm install bitbucket-pipelines-viewer-react
+npm install @eulolabs/bitbucket-pipelines-viewer-react
 
 # Using pnpm
-pnpm add bitbucket-pipelines-viewer-react
+pnpm add @eulolabs/bitbucket-pipelines-viewer-react
 
 # Using yarn
-yarn add bitbucket-pipelines-viewer-react
+yarn add @eulolabs/bitbucket-pipelines-viewer-react
 ```
 
 ## Basic Usage
 
 ```tsx
 import React from "react";
-import { PipelinesViewer } from "bitbucket-pipelines-viewer-react";
-import "bitbucket-pipelines-viewer-react/style.css";
+import { PipelinesViewer } from "@eulolabs/bitbucket-pipelines-viewer-react";
+import "@eulolabs/bitbucket-pipelines-viewer-react/style.css";
 
 const myYaml = `
 pipelines:
