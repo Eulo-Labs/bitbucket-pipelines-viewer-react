@@ -49,8 +49,6 @@ const OptionsPanel: React.FC<OptionsPanelProps> = ({ options }) => {
         style={{
           fontWeight: 600,
           fontSize: "11px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
           color: token("color.text.discovery", "#6E5DC6"),
           marginBottom: isExpanded ? "8px" : "0",
           display: "flex",

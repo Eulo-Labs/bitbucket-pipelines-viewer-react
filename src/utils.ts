@@ -365,7 +365,6 @@ const buildNodeLabel = (
               borderRadius: "10px",
               border: `1px solid ${token("color.border.accent.blue", "#0052CC")}`,
               fontWeight: "bold",
-              textTransform: "uppercase",
               whiteSpace: "nowrap",
             },
           },

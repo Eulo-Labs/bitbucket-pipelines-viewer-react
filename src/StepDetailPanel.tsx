@@ -152,14 +152,12 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
               borderRadius: "3px",
               fontSize: "11px",
               fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
               background: badgeColor.bg,
               color: badgeColor.text,
               flexShrink: 0,
             }}
           >
-            {stepType}
+            {stepType.charAt(0).toUpperCase() + stepType.slice(1)}
           </span>
         </div>
         <button
@@ -241,12 +239,10 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
                 margin: "0 0 8px 0",
                 fontSize: "12px",
                 fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
                 color: token("color.text.subtle", "#6B778C"),
               }}
             >
-              YAML
+              Yaml
             </h4>
             <div
               style={{

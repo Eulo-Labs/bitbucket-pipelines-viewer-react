@@ -51,8 +51,6 @@ const ImagePanel: React.FC<ImagePanelProps> = ({
         style={{
           fontWeight: 600,
           fontSize: "11px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
           color: token("color.text.information", "#0052CC"),
           marginBottom: isExpanded ? "8px" : "0",
           display: "flex",

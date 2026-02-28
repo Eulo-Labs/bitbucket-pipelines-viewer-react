@@ -49,8 +49,6 @@ const VariablesPanel: React.FC<VariablesPanelProps> = ({ variables }) => {
         style={{
           fontWeight: 600,
           fontSize: "11px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
           color: token("color.text.warning", "#A54800"),
           marginBottom: isExpanded ? "8px" : "0",
           display: "flex",
