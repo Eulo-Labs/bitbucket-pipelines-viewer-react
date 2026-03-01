@@ -19,15 +19,20 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import "./PipelinesViewer.css";
 import { token } from "@atlaskit/tokens";
-import { parsePipelines, transformStepsToGraph } from "./utils";
+import {
+  parsePipelines,
+  transformStepsToGraph,
+  parseImportSources,
+} from "./utils";
 import {
   PipelineDefinition,
   StepNodeData,
   PipelineVariable,
   EdgeData,
+  ImportSource,
+  ImportResolution,
 } from "./types";
 import StepDetailPanel from "./StepDetailPanel";
-import FullSourceOverlay from "./FullSourceOverlay";
 import VariablesPanel from "./VariablesPanel";
 import OptionsPanel from "./OptionsPanel";
 import ImagePanel from "./ImagePanel";
@@ -40,6 +45,12 @@ export interface PipelinesViewerProps {
   height?: string;
   /** Error callback — called when parsing fails or no pipelines found */
   onError?: (error: string) => void;
+  /**
+   * Async callback to resolve imported YAML files.
+   * Called with parsed import sources from `definitions.imports`.
+   * Return the raw YAML content for each source, or null/error for failures.
+   */
+  onResolveImport?: (sources: ImportSource[]) => Promise<ImportResolution[]>;
 }
 
 const FullscreenIcon = () => (
@@ -82,22 +93,6 @@ const ExitFullscreenIcon = () => (
   </svg>
 );
 
-const CodeIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="16 18 22 12 16 6" />
-    <polyline points="8 6 2 12 8 18" />
-  </svg>
-);
-
 const PlayIcon = () => (
   <svg
     width="16"
@@ -126,6 +121,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   content,
   height = "800px",
   onError,
+  onResolveImport,
 }) => {
   const [pipelines, setPipelines] = useState<PipelineDefinition[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(
@@ -135,7 +131,8 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isFullSourceOpen, setIsFullSourceOpen] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(380);
   const { fitView } = useReactFlow();
 
   const [selectedNode, setSelectedNode] = useState<Node<StepNodeData> | null>(
@@ -143,6 +140,10 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const hasAutoPlayedRef = useRef(false);
+  const isResizingSidebarRef = useRef(false);
+
+  const MIN_SIDEBAR_WIDTH = 280;
+  const MAX_SIDEBAR_WIDTH = 720;
 
   // Staged edge animation state
   const [animatingStage, setAnimatingStage] = useState<number | null>(null);
@@ -219,6 +220,10 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
                     >
                       {currentMapPipelines.map((p) => (
                         <option key={p.id} value={p.id}>
+                          {p.importedFrom?.error ? "\u26A0 " : ""}
+                          {p.importedFrom && !p.importedFrom.error
+                            ? "\u2B07 "
+                            : ""}
                           {p.name}
                         </option>
                       ))}
@@ -251,7 +256,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   // Automatically fit view when entering/exiting fullscreen
   useEffect(() => {
     const timer = setTimeout(() => {
-      fitView({ duration: 400, padding: 0.4 });
+      fitView({ duration: 400, padding: 0.4, maxZoom: 1.15 });
     }, 300);
     return () => clearTimeout(timer);
   }, [isFullscreen, fitView]);
@@ -265,6 +270,31 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     [],
   );
 
+  const updateSidebarWidth = useCallback(
+    (clientX: number) => {
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+      const maxAllowedWidth = Math.min(
+        MAX_SIDEBAR_WIDTH,
+        containerRect.width - 280,
+      );
+      const clampedMaxWidth = Math.max(MIN_SIDEBAR_WIDTH, maxAllowedWidth);
+      const nextWidth = containerRect.right - clientX;
+      setSidebarWidth(
+        Math.max(MIN_SIDEBAR_WIDTH, Math.min(nextWidth, clampedMaxWidth)),
+      );
+    },
+    [MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH],
+  );
+
+  const handleSidebarResizeStart = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      isResizingSidebarRef.current = true;
+    },
+    [],
+  );
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -274,6 +304,24 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isResizingSidebarRef.current) return;
+      updateSidebarWidth(event.clientX);
+    };
+
+    const handleMouseUp = () => {
+      isResizingSidebarRef.current = false;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [updateSidebarWidth]);
 
   const toggleFullScreen = () => {
     if (!containerRef.current) return;
@@ -289,11 +337,13 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
     }
   };
 
-  // Parse content and initialise graph
+  // Parse content and initialise graph (with optional import resolution)
   useEffect(() => {
     hasAutoPlayedRef.current = false;
-    try {
-      const parsed = parsePipelines(content);
+    let cancelled = false;
+
+    const initializePipelines = (parsed: PipelineDefinition[]) => {
+      if (cancelled) return;
       setPipelines(parsed);
 
       if (parsed.length > 0) {
@@ -318,12 +368,60 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
         setEdges([]);
         onError?.("No pipelines found in this file.");
       }
+    };
+
+    try {
+      // Extract import sources from the YAML
+      const importSources = parseImportSources(content);
+
+      if (importSources.length > 0 && onResolveImport) {
+        // Resolve imports asynchronously
+        setImportLoading(true);
+        onResolveImport(importSources)
+          .then((resolutions) => {
+            if (cancelled) return;
+            // Build resolved imports map: sourceAlias → YAML content
+            const resolvedImportsMap = new Map<string, string>();
+            resolutions.forEach((r) => {
+              if (r.content) {
+                resolvedImportsMap.set(r.source.name, r.content);
+              }
+            });
+            const parsed = parsePipelines(content, resolvedImportsMap);
+            initializePipelines(parsed);
+          })
+          .catch((err) => {
+            if (cancelled) return;
+            // Fall back to parsing without resolved imports
+            console.error("Error resolving imports:", err);
+            const parsed = parsePipelines(content);
+            initializePipelines(parsed);
+          })
+          .finally(() => {
+            if (!cancelled) setImportLoading(false);
+          });
+      } else {
+        // No imports or no resolver — parse synchronously
+        const parsed = parsePipelines(content);
+        initializePipelines(parsed);
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to parse pipeline YAML";
       onError?.(msg);
     }
-  }, [content, setNodes, setEdges, onError, applyStartNodeDropdown]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    content,
+    setNodes,
+    setEdges,
+    onError,
+    applyStartNodeDropdown,
+    onResolveImport,
+  ]);
 
   // --- Staged animation logic ---
   const maxStage = useMemo(() => {
@@ -489,6 +587,30 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
       }}
     >
       <div style={{ flex: 1, position: "relative" }}>
+        {importLoading && (
+          <div
+            style={{
+              position: "absolute",
+              top: "12px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 30,
+              background: token(
+                "color.background.accent.blue.subtlest",
+                "#E9F2FF",
+              ),
+              color: token("color.text.accent.blue", "#0055CC"),
+              padding: "6px 16px",
+              borderRadius: "6px",
+              border: `1px solid ${token("color.border.accent.blue", "#85B8FF")}`,
+              fontSize: "12px",
+              fontWeight: 500,
+              boxShadow: "0 2px 4px rgba(0,0,0,0.08)",
+            }}
+          >
+            Resolving imports...
+          </div>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -496,7 +618,11 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
           fitView
-          fitViewOptions={{ padding: 0.4, includeHiddenNodes: false }}
+          fitViewOptions={{
+            padding: 0.4,
+            includeHiddenNodes: false,
+            maxZoom: 1.15,
+          }}
           defaultEdgeOptions={{ type: "step" }}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -504,20 +630,17 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
           attributionPosition="bottom-right"
         >
           <Background color={token("color.border", "#aaa")} gap={16} />
-          <Controls position="top-right" showInteractive={false}>
+          <Controls
+            position="top-right"
+            showInteractive={false}
+            style={{ right: `${sidebarWidth + 12}px`, top: 10 }}
+          >
             <ControlButton
               onClick={toggleFullScreen}
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
               {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
-            </ControlButton>
-            <ControlButton
-              onClick={() => setIsFullSourceOpen(true)}
-              title="Show source"
-              aria-label="Show source"
-            >
-              <CodeIcon />
             </ControlButton>
             <ControlButton
               onClick={animatingStage !== null ? stopAnimation : startAnimation}
@@ -555,18 +678,12 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
             </Panel>
           )}
         </ReactFlow>
-        {selectedNode && selectedNode.data && (
-          <StepDetailPanel
-            data={selectedNode.data}
-            onClose={() => setSelectedNode(null)}
-          />
-        )}
-        {isFullSourceOpen && (
-          <FullSourceOverlay
-            content={content}
-            onClose={() => setIsFullSourceOpen(false)}
-          />
-        )}
+        <StepDetailPanel
+          data={selectedNode?.data ?? null}
+          width={sidebarWidth}
+          onResizeStart={handleSidebarResizeStart}
+          onClearSelection={() => setSelectedNode(null)}
+        />
       </div>
     </div>
   );

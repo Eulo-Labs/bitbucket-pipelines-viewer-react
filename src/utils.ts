@@ -10,7 +10,116 @@ import {
   StepNodeData,
   EdgeData,
   YamlDoc,
+  ImportSource,
+  PipelineImport,
 } from "./types";
+
+/**
+ * Parse a raw import source string from `definitions.imports` into an {@link ImportSource}.
+ *
+ * Formats:
+ * - No `:` → same-repo filepath (e.g., `.bitbucket/shared.yml`)
+ * - One `:` → `repo:ref` format (uses default `bitbucket-pipelines.yml`)
+ * - Two `:` → `repo:ref:filepath` format
+ *
+ * @param name - The alias name for this import source.
+ * @param raw - The raw source string from YAML.
+ * @returns A parsed {@link ImportSource} object.
+ */
+export const parseImportSource = (name: string, raw: string): ImportSource => {
+  const parts = raw.split(":");
+  if (parts.length === 1) {
+    // Same-repo filepath: e.g., ".bitbucket/shared-pipelines.yml"
+    return {
+      name,
+      raw,
+      type: "same-repo",
+      filePath: raw,
+    };
+  } else if (parts.length === 2) {
+    // Cross-repo: "repo:ref" (default filepath)
+    return {
+      name,
+      raw,
+      type: "cross-repo",
+      repoSlug: parts[0],
+      ref: parts[1],
+      filePath: "bitbucket-pipelines.yml",
+    };
+  } else {
+    // Cross-repo with custom filepath: "repo:ref:filepath"
+    return {
+      name,
+      raw,
+      type: "cross-repo",
+      repoSlug: parts[0],
+      ref: parts[1],
+      filePath: parts.slice(2).join(":"),
+    };
+  }
+};
+
+/**
+ * Parse an import directive string of the form `"pipeline-name@source-alias"`.
+ *
+ * @param value - The import directive string.
+ * @returns A {@link PipelineImport} object, or `null` if the string is not a valid import directive.
+ */
+export const parseImportDirective = (value: string): PipelineImport | null => {
+  if (!value || typeof value !== "string") return null;
+  const atIndex = value.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex === value.length - 1) return null;
+  return {
+    pipelineName: value.substring(0, atIndex),
+    sourceAlias: value.substring(atIndex + 1),
+  };
+};
+
+/**
+ * Extract all import sources from a raw YAML string.
+ *
+ * Parses the `definitions.imports` section of a bitbucket-pipelines.yml file
+ * and returns an array of {@link ImportSource} objects.
+ *
+ * @param content - Raw YAML string.
+ * @returns An array of parsed import sources, or empty array if none found.
+ */
+export const parseImportSources = (content: string): ImportSource[] => {
+  try {
+    const doc = yaml.load(content) as YamlDoc;
+    if (!doc?.definitions?.imports) return [];
+    return Object.entries(doc.definitions.imports).map(([name, raw]) =>
+      parseImportSource(name, raw),
+    );
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Check if a pipeline step array entry is an import directive.
+ *
+ * Import directives in Bitbucket Pipelines look like:
+ * ```yaml
+ * - import: pipeline-name@source-alias
+ * ```
+ *
+ * @param entry - A pipeline step entry from the YAML.
+ * @returns The import directive string if this is an import entry, or null.
+ */
+const getImportDirective = (
+  entry: PipelineStep | Record<string, unknown>,
+): string | null => {
+  if (
+    entry &&
+    typeof entry === "object" &&
+    "import" in entry &&
+    typeof (entry as Record<string, unknown>).import === "string"
+  ) {
+    return (entry as Record<string, unknown>).import as string;
+  }
+  return null;
+};
 
 const deriveStepType = (step: PipelineStep): StepNodeData["stepType"] => {
   if (step.script) {
@@ -34,7 +143,10 @@ const deriveStepType = (step: PipelineStep): StepNodeData["stepType"] => {
  * @param content - Raw YAML string of a bitbucket-pipelines.yml file.
  * @returns An array of parsed pipeline definitions, or an empty array if parsing fails.
  */
-export const parsePipelines = (content: string): PipelineDefinition[] => {
+export const parsePipelines = (
+  content: string,
+  resolvedImports?: Map<string, string>,
+): PipelineDefinition[] => {
   try {
     const doc = yaml.load(content) as YamlDoc;
     if (!doc || !doc.pipelines) {
@@ -49,6 +161,14 @@ export const parsePipelines = (content: string): PipelineDefinition[] => {
         : typeof doc.image === "object" && doc.image !== null
           ? doc.image.name
           : null;
+
+    // Parse import sources from definitions.imports
+    const importSources: Map<string, ImportSource> = new Map();
+    if (doc.definitions?.imports) {
+      Object.entries(doc.definitions.imports).forEach(([name, raw]) => {
+        importSources.set(name, parseImportSource(name, raw));
+      });
+    }
 
     const extractVariablesAndSteps = (allEntries: PipelineStep[]) => {
       const variables: PipelineVariable[] = [];
@@ -70,6 +190,196 @@ export const parsePipelines = (content: string): PipelineDefinition[] => {
       return { variables, steps: filteredSteps };
     };
 
+    /**
+     * Try to resolve an import directive within a steps array.
+     *
+     * If the steps array contains a single import directive, resolve it
+     * using the resolvedImports map and the importSources. Returns:
+     * - The resolved pipeline steps + importedFrom metadata if successful
+     * - Empty steps + importedFrom with error if resolution fails
+     * - null if the steps array is not an import directive
+     */
+    const tryResolveImport = (
+      stepsOrImport: PipelineStep[] | unknown,
+    ): {
+      steps: PipelineStep[];
+      variables: PipelineVariable[];
+      importedFrom: PipelineDefinition["importedFrom"];
+    } | null => {
+      // Check if this is an import directive (single-element array or direct object)
+      // Bitbucket format: `import: pipeline-name@source-alias`
+      if (!Array.isArray(stepsOrImport)) {
+        // Could be a direct import object: { import: "name@source" }
+        const directive = getImportDirective(
+          stepsOrImport as Record<string, unknown>,
+        );
+        if (directive) {
+          return resolveImportDirective(directive);
+        }
+        return null;
+      }
+
+      // Check each entry in the steps array for import directives
+      for (const entry of stepsOrImport) {
+        const directive = getImportDirective(entry as Record<string, unknown>);
+        if (directive) {
+          return resolveImportDirective(directive);
+        }
+      }
+
+      return null;
+    };
+
+    const resolveImportDirective = (
+      directive: string,
+    ): {
+      steps: PipelineStep[];
+      variables: PipelineVariable[];
+      importedFrom: PipelineDefinition["importedFrom"];
+    } => {
+      const parsed = parseImportDirective(directive);
+      if (!parsed) {
+        return {
+          steps: [],
+          variables: [],
+          importedFrom: {
+            sourceName: "unknown",
+            pipelineName: directive,
+            sourceSpec: {
+              name: "unknown",
+              raw: directive,
+              type: "same-repo",
+            },
+            error: `Invalid import directive: "${directive}"`,
+          },
+        };
+      }
+
+      const { pipelineName, sourceAlias } = parsed;
+      const sourceSpec = importSources.get(sourceAlias);
+
+      if (!sourceSpec) {
+        return {
+          steps: [],
+          variables: [],
+          importedFrom: {
+            sourceName: sourceAlias,
+            pipelineName,
+            sourceSpec: {
+              name: sourceAlias,
+              raw: sourceAlias,
+              type: "same-repo",
+            },
+            error: `Import source "${sourceAlias}" not found in definitions.imports`,
+          },
+        };
+      }
+
+      // Try to resolve the imported content
+      const importedContent = resolvedImports?.get(sourceAlias);
+      if (!importedContent) {
+        return {
+          steps: [],
+          variables: [],
+          importedFrom: {
+            sourceName: sourceAlias,
+            pipelineName,
+            sourceSpec,
+            error: resolvedImports
+              ? `Could not resolve import from "${sourceAlias}"`
+              : "No resolver provided",
+          },
+        };
+      }
+
+      // Parse the imported YAML and extract the named pipeline
+      try {
+        const importedDoc = yaml.load(importedContent) as YamlDoc;
+        if (!importedDoc?.pipelines?.custom?.[pipelineName]) {
+          // Also check other pipeline types
+          const allPipelines: Record<string, PipelineStep[]> = {};
+          if (importedDoc?.pipelines) {
+            if (importedDoc.pipelines.default) {
+              allPipelines["default"] = importedDoc.pipelines.default;
+            }
+            if (importedDoc.pipelines.branches) {
+              Object.entries(importedDoc.pipelines.branches).forEach(
+                ([k, v]) => {
+                  allPipelines[k] = v;
+                },
+              );
+            }
+            if (importedDoc.pipelines.custom) {
+              Object.entries(importedDoc.pipelines.custom).forEach(([k, v]) => {
+                allPipelines[k] = v;
+              });
+            }
+            if (importedDoc.pipelines.tags) {
+              Object.entries(importedDoc.pipelines.tags).forEach(([k, v]) => {
+                allPipelines[k] = v;
+              });
+            }
+            if (importedDoc.pipelines["pull-requests"]) {
+              Object.entries(importedDoc.pipelines["pull-requests"]).forEach(
+                ([k, v]) => {
+                  allPipelines[k] = v;
+                },
+              );
+            }
+          }
+
+          if (allPipelines[pipelineName]) {
+            const { variables, steps } = extractVariablesAndSteps(
+              allPipelines[pipelineName],
+            );
+            return {
+              steps,
+              variables,
+              importedFrom: {
+                sourceName: sourceAlias,
+                pipelineName,
+                sourceSpec,
+              },
+            };
+          }
+
+          return {
+            steps: [],
+            variables: [],
+            importedFrom: {
+              sourceName: sourceAlias,
+              pipelineName,
+              sourceSpec,
+              error: `Pipeline "${pipelineName}" not found in imported source "${sourceAlias}"`,
+            },
+          };
+        }
+
+        const importedSteps = importedDoc.pipelines.custom[pipelineName];
+        const { variables, steps } = extractVariablesAndSteps(importedSteps);
+        return {
+          steps,
+          variables,
+          importedFrom: {
+            sourceName: sourceAlias,
+            pipelineName,
+            sourceSpec,
+          },
+        };
+      } catch (parseErr) {
+        return {
+          steps: [],
+          variables: [],
+          importedFrom: {
+            sourceName: sourceAlias,
+            pipelineName,
+            sourceSpec,
+            error: `Failed to parse imported YAML from "${sourceAlias}": ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+          },
+        };
+      }
+    };
+
     const schedulesByPipeline: Record<string, { cron: string }[]> = {};
     if (doc.triggers) {
       doc.triggers.forEach((t) => {
@@ -85,103 +395,128 @@ export const parsePipelines = (content: string): PipelineDefinition[] => {
       });
     }
 
-    if (doc.pipelines.default) {
-      const { variables, steps } = extractVariablesAndSteps(
-        doc.pipelines.default,
-      );
-      pipelines.push({
-        id: "default",
-        name: "Default",
+    /**
+     * Process a pipeline entry, checking for import directives first.
+     * Returns a PipelineDefinition with import metadata if applicable.
+     */
+    const processPipelineEntry = (
+      id: string,
+      name: string,
+      stepsOrImport: PipelineStep[],
+      triggerType: PipelineDefinition["triggerType"],
+      triggerPattern?: string,
+      scheduleKey?: string,
+    ): PipelineDefinition => {
+      // Check for import directives
+      const importResult = tryResolveImport(stepsOrImport);
+      if (importResult) {
+        return {
+          id,
+          name,
+          steps: importResult.steps,
+          triggerType,
+          triggerPattern,
+          ...(importResult.variables.length > 0
+            ? { variables: importResult.variables }
+            : {}),
+          ...(Object.keys(globalOptions).length > 0
+            ? { options: globalOptions }
+            : {}),
+          ...(globalImage ? { image: globalImage } : {}),
+          schedules: scheduleKey ? schedulesByPipeline[scheduleKey] : undefined,
+          importedFrom: importResult.importedFrom,
+        };
+      }
+
+      // Normal pipeline (no import)
+      const { variables, steps } = extractVariablesAndSteps(stepsOrImport);
+      return {
+        id,
+        name,
         steps,
-        triggerType: "default",
+        triggerType,
+        triggerPattern,
         ...(variables.length > 0 ? { variables } : {}),
         ...(Object.keys(globalOptions).length > 0
           ? { options: globalOptions }
           : {}),
         ...(globalImage ? { image: globalImage } : {}),
-        schedules: schedulesByPipeline["default"],
-      });
+        schedules: scheduleKey ? schedulesByPipeline[scheduleKey] : undefined,
+      };
+    };
+
+    if (doc.pipelines.default) {
+      pipelines.push(
+        processPipelineEntry(
+          "default",
+          "Default",
+          doc.pipelines.default,
+          "default",
+          undefined,
+          "default",
+        ),
+      );
     }
 
     if (doc.pipelines.branches) {
       Object.entries(doc.pipelines.branches).forEach(([branchName, steps]) => {
-        const { variables, steps: filteredSteps } =
-          extractVariablesAndSteps(steps);
-        pipelines.push({
-          id: `branch-${branchName}`,
-          name: `Branch: ${branchName}`,
-          steps: filteredSteps,
-          triggerType: "branch",
-          triggerPattern: branchName,
-          ...(variables.length > 0 ? { variables } : {}),
-          ...(Object.keys(globalOptions).length > 0
-            ? { options: globalOptions }
-            : {}),
-          ...(globalImage ? { image: globalImage } : {}),
-          schedules: schedulesByPipeline[`branches.${branchName}`],
-        });
+        pipelines.push(
+          processPipelineEntry(
+            `branch-${branchName}`,
+            `Branch: ${branchName}`,
+            steps,
+            "branch",
+            branchName,
+            `branches.${branchName}`,
+          ),
+        );
       });
     }
 
     if (doc.pipelines["pull-requests"]) {
       Object.entries(doc.pipelines["pull-requests"]).forEach(
         ([pattern, steps]) => {
-          const { variables, steps: filteredSteps } =
-            extractVariablesAndSteps(steps);
-          pipelines.push({
-            id: `pr-${pattern}`,
-            name: `Pull Request: ${pattern}`,
-            steps: filteredSteps,
-            triggerType: "pull-request",
-            triggerPattern: pattern,
-            ...(variables.length > 0 ? { variables } : {}),
-            ...(Object.keys(globalOptions).length > 0
-              ? { options: globalOptions }
-              : {}),
-            ...(globalImage ? { image: globalImage } : {}),
-            schedules: schedulesByPipeline[`pull-requests.${pattern}`],
-          });
+          pipelines.push(
+            processPipelineEntry(
+              `pr-${pattern}`,
+              `Pull Request: ${pattern}`,
+              steps,
+              "pull-request",
+              pattern,
+              `pull-requests.${pattern}`,
+            ),
+          );
         },
       );
     }
 
     if (doc.pipelines.custom) {
       Object.entries(doc.pipelines.custom).forEach(([customName, steps]) => {
-        const { variables, steps: filteredSteps } =
-          extractVariablesAndSteps(steps);
-        pipelines.push({
-          id: `custom-${customName}`,
-          name: `Custom: ${customName}`,
-          steps: filteredSteps,
-          triggerType: "custom",
-          triggerPattern: customName,
-          ...(variables.length > 0 ? { variables } : {}),
-          ...(Object.keys(globalOptions).length > 0
-            ? { options: globalOptions }
-            : {}),
-          ...(globalImage ? { image: globalImage } : {}),
-          schedules: schedulesByPipeline[`custom.${customName}`],
-        });
+        pipelines.push(
+          processPipelineEntry(
+            `custom-${customName}`,
+            `Custom: ${customName}`,
+            steps,
+            "custom",
+            customName,
+            `custom.${customName}`,
+          ),
+        );
       });
     }
 
     if (doc.pipelines.tags) {
       Object.entries(doc.pipelines.tags).forEach(([tagName, steps]) => {
-        const { variables, steps: filteredSteps } =
-          extractVariablesAndSteps(steps);
-        pipelines.push({
-          id: `tag-${tagName}`,
-          name: `Tag: ${tagName}`,
-          steps: filteredSteps,
-          triggerType: "tag",
-          triggerPattern: tagName,
-          ...(variables.length > 0 ? { variables } : {}),
-          ...(Object.keys(globalOptions).length > 0
-            ? { options: globalOptions }
-            : {}),
-          ...(globalImage ? { image: globalImage } : {}),
-          schedules: schedulesByPipeline[`tags.${tagName}`],
-        });
+        pipelines.push(
+          processPipelineEntry(
+            `tag-${tagName}`,
+            `Tag: ${tagName}`,
+            steps,
+            "tag",
+            tagName,
+            `tags.${tagName}`,
+          ),
+        );
       });
     }
 
@@ -401,10 +736,138 @@ const buildNodeLabel = (
  * @param pipeline - The pipeline definition to transform.
  * @returns An object containing `nodes` and `edges` arrays for React Flow.
  */
+/**
+ * Build a label for an import boundary badge node.
+ */
+const buildImportBadgeLabel = (
+  sourceName: string,
+  pipelineName: string,
+): React.ReactNode => {
+  return React.createElement(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: "center",
+        gap: "2px",
+        width: "100%",
+      },
+    },
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "9px",
+          fontWeight: 700,
+          textTransform: "uppercase" as const,
+          letterSpacing: "0.5px",
+          color: token("color.text.accent.purple", "#403294"),
+        },
+      },
+      "Imported",
+    ),
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "11px",
+          fontWeight: 500,
+          color: token("color.text.accent.purple", "#403294"),
+        },
+      },
+      `${pipelineName}`,
+    ),
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "9px",
+          color: token("color.text.subtle", "#626F86"),
+          fontFamily: "monospace",
+        },
+      },
+      `from: ${sourceName}`,
+    ),
+  );
+};
+
+/**
+ * Build a label for an unresolved import error node.
+ */
+const buildImportErrorLabel = (
+  pipelineName: string,
+  sourceName: string,
+  error: string,
+  sourceRaw?: string,
+): React.ReactNode => {
+  return React.createElement(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: "center",
+        gap: "4px",
+        width: "100%",
+      },
+    },
+    React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        },
+      },
+      React.createElement(
+        "span",
+        { style: { fontSize: "14px" } },
+        "\u26A0", // warning triangle
+      ),
+      React.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "11px",
+            fontWeight: 600,
+          },
+        },
+        `Import: ${pipelineName}`,
+      ),
+    ),
+    React.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          color: token("color.text.warning", "#974F0C"),
+          textAlign: "center" as const,
+        },
+      },
+      error,
+    ),
+    sourceRaw &&
+      React.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "9px",
+            color: token("color.text.subtle", "#626F86"),
+            fontFamily: "monospace",
+            textAlign: "center" as const,
+          },
+        },
+        sourceRaw,
+      ),
+  );
+};
+
 export const transformStepsToGraph = (
   pipeline: PipelineDefinition,
 ): { nodes: Node[]; edges: Edge[] } => {
-  const { steps } = pipeline;
+  const { steps, importedFrom } = pipeline;
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   let nodeIdCounter = 0;
@@ -438,6 +901,102 @@ export const transformStepsToGraph = (
 
   let previousNodeIds: string[] = [startNodeId];
 
+  // Handle unresolved/errored imports — show a single placeholder node
+  if (importedFrom && importedFrom.error) {
+    const importNodeId = `import-error-${nodeIdCounter++}`;
+    nodes.push({
+      id: importNodeId,
+      data: {
+        label: buildImportErrorLabel(
+          importedFrom.pipelineName,
+          importedFrom.sourceName,
+          importedFrom.error,
+          importedFrom.sourceSpec.raw,
+        ),
+        stepType: "import",
+        importInfo: importedFrom,
+      } as StepNodeData,
+      position: { x: 0, y: 0 },
+      style: {
+        border: `2px dashed ${token("color.border.warning", "#F5CD47")}`,
+        borderRadius: "8px",
+        padding: "12px 16px",
+        background: token("color.background.warning", "#FFF7D6"),
+        color: token("color.text.warning", "#974F0C"),
+        width: 260,
+        minHeight: 60,
+        fontSize: "12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        cursor: "pointer",
+        whiteSpace: "normal",
+        wordBreak: "break-word",
+      },
+    });
+
+    previousNodeIds.forEach((prevId) => {
+      edges.push({
+        id: `e-${prevId}-${importNodeId}`,
+        source: prevId,
+        target: importNodeId,
+        type: "step",
+        animated: false,
+        data: { stage: stageCounter } as EdgeData,
+      });
+    });
+    stageCounter++;
+    previousNodeIds = [importNodeId];
+  } else if (importedFrom && !importedFrom.error && steps.length > 0) {
+    // Resolved import — add an import badge node before the steps
+    const badgeNodeId = `import-badge-${nodeIdCounter++}`;
+    nodes.push({
+      id: badgeNodeId,
+      data: {
+        label: buildImportBadgeLabel(
+          importedFrom.sourceName,
+          importedFrom.pipelineName,
+        ),
+        stepType: "import",
+        importInfo: importedFrom,
+      } as StepNodeData,
+      position: { x: 0, y: 0 },
+      style: {
+        border: `2px dashed ${token("color.border.accent.purple", "#8270DB")}`,
+        borderRadius: "8px",
+        padding: "8px 12px",
+        background: token("color.background.accent.purple.subtlest", "#F3F0FF"),
+        color: token("color.text.accent.purple", "#403294"),
+        width: 220,
+        minHeight: 40,
+        fontSize: "12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        cursor: "pointer",
+        whiteSpace: "normal",
+        wordBreak: "break-word",
+      },
+    });
+
+    previousNodeIds.forEach((prevId) => {
+      edges.push({
+        id: `e-${prevId}-${badgeNodeId}`,
+        source: prevId,
+        target: badgeNodeId,
+        type: "step",
+        animated: false,
+        data: { stage: stageCounter } as EdgeData,
+      });
+    });
+    stageCounter++;
+    previousNodeIds = [badgeNodeId];
+  }
+
   const unwrapStep = (step: PipelineStep): PipelineStep => {
     const merged: PipelineStep = {};
     let current: PipelineStep | undefined = step;
@@ -451,6 +1010,9 @@ export const transformStepsToGraph = (
     }
     return merged;
   };
+
+  // Determine if this pipeline's steps are from an import (for styling)
+  const isImported = !!importedFrom && !importedFrom.error;
 
   const processStep = (step: PipelineStep) => {
     if (step.parallel) {
@@ -480,15 +1042,21 @@ export const transformStepsToGraph = (
           style: {
             border: isManual
               ? `2px dashed ${token("color.border.accent.blue", "#0052CC")}`
-              : `1px solid ${token("color.border.success", "#4CBA61")}`,
+              : isImported
+                ? `1px solid ${token("color.border.accent.purple", "#8270DB")}`
+                : `1px solid ${token("color.border.success", "#4CBA61")}`,
             borderRadius: "4px",
             padding: "8px 12px",
             background: isManual
               ? token("color.background.accent.blue.subtle", "#E9F2FF")
-              : token("color.background.success", "#D3F1A7"),
+              : isImported
+                ? token("color.background.accent.purple.subtlest", "#F3F0FF")
+                : token("color.background.success", "#D3F1A7"),
             color: isManual
               ? token("color.text.accent.blue", "#0052CC")
-              : token("color.text.success", "#216E4E"),
+              : isImported
+                ? token("color.text.accent.purple", "#403294")
+                : token("color.text.success", "#216E4E"),
             width: DEFAULT_NODE_WIDTH,
             minHeight: 40,
             fontSize: "12px",
@@ -543,15 +1111,21 @@ export const transformStepsToGraph = (
         style: {
           border: isManual
             ? `2px dashed ${token("color.border.accent.blue", "#0052CC")}`
-            : `1px solid ${token("color.border.success", "#4CBA61")}`,
+            : isImported
+              ? `1px solid ${token("color.border.accent.purple", "#8270DB")}`
+              : `1px solid ${token("color.border.success", "#4CBA61")}`,
           borderRadius: "4px",
           padding: "8px 12px",
           background: isManual
             ? token("color.background.accent.blue.subtle", "#E9F2FF")
-            : token("color.background.success", "#D3F1A7"),
+            : isImported
+              ? token("color.background.accent.purple.subtlest", "#F3F0FF")
+              : token("color.background.success", "#D3F1A7"),
           color: isManual
             ? token("color.text.accent.blue", "#0052CC")
-            : token("color.text.success", "#216E4E"),
+            : isImported
+              ? token("color.text.accent.purple", "#403294")
+              : token("color.text.success", "#216E4E"),
           width: DEFAULT_NODE_WIDTH,
           minHeight: 40,
           fontSize: "12px",

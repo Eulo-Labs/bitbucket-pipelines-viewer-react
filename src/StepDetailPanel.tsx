@@ -9,8 +9,10 @@ import { StepNodeData } from "./types";
 SyntaxHighlighter.registerLanguage("yaml", yamlLang);
 
 interface StepDetailPanelProps {
-  data: StepNodeData;
-  onClose: () => void;
+  data: StepNodeData | null;
+  width: number;
+  onResizeStart: (event: React.MouseEvent<HTMLDivElement>) => void;
+  onClearSelection: () => void;
 }
 
 const stepTypeBadgeColors: Record<
@@ -44,6 +46,10 @@ const stepTypeBadgeColors: Record<
   trigger: {
     bg: token("color.background.neutral", "#F4F5F7"),
     text: token("color.text.subtle", "#42526E"),
+  },
+  import: {
+    bg: token("color.background.accent.purple.subtlest", "#F3F0FF"),
+    text: token("color.text.accent.purple", "#403294"),
   },
 };
 
@@ -81,9 +87,17 @@ const MetadataRow = ({
   </div>
 );
 
-const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
-  const { label, rawStep, stepType } = data;
+const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
+  data,
+  width,
+  onResizeStart,
+  onClearSelection,
+}) => {
+  const stepType = data?.stepType ?? "step";
   const badgeColor = stepTypeBadgeColors[stepType] || stepTypeBadgeColors.step;
+  const label = data?.label ?? "Step details";
+  const rawStep = data?.rawStep;
+  const importInfo = data?.importInfo;
 
   // Lazy-compute YAML snippet only when the detail panel is shown
   const yamlSnippet = useMemo(() => {
@@ -98,7 +112,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
         top: 0,
         right: 0,
         bottom: 0,
-        width: "380px",
+        width: `${width}px`,
         maxWidth: "100%",
         background: token("elevation.surface.overlay", "#fff"),
         borderLeft: `1px solid ${token("color.border", "#ebecf0")}`,
@@ -113,6 +127,21 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
         color: token("color.text", "#172B4D"),
       }}
     >
+      <div
+        role="separator"
+        aria-label="Resize details panel"
+        onMouseDown={onResizeStart}
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: "8px",
+          transform: "translateX(-50%)",
+          cursor: "col-resize",
+          zIndex: 2,
+        }}
+      />
       {/* Header */}
       <div
         style={{
@@ -145,38 +174,42 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
           >
             {label}
           </h3>
-          <span
+          {data && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "2px 8px",
+                borderRadius: "3px",
+                fontSize: "11px",
+                fontWeight: 700,
+                background: badgeColor.bg,
+                color: badgeColor.text,
+                flexShrink: 0,
+              }}
+            >
+              {stepType.charAt(0).toUpperCase() + stepType.slice(1)}
+            </span>
+          )}
+        </div>
+        {data && (
+          <button
+            onClick={onClearSelection}
             style={{
-              display: "inline-block",
-              padding: "2px 8px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "18px",
+              lineHeight: 1,
+              color: token("color.text.subtle", "#6B778C"),
+              padding: "4px",
               borderRadius: "3px",
-              fontSize: "11px",
-              fontWeight: 700,
-              background: badgeColor.bg,
-              color: badgeColor.text,
               flexShrink: 0,
             }}
+            aria-label="Clear selection"
           >
-            {stepType.charAt(0).toUpperCase() + stepType.slice(1)}
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "18px",
-            lineHeight: 1,
-            color: token("color.text.subtle", "#6B778C"),
-            padding: "4px",
-            borderRadius: "3px",
-            flexShrink: 0,
-          }}
-          aria-label="Close panel"
-        >
-          ✕
-        </button>
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Body */}
@@ -187,8 +220,67 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
           padding: "16px",
         }}
       >
+        {!data && (
+          <div
+            style={{
+              fontSize: "13px",
+              color: token("color.text.subtle", "#6B778C"),
+              lineHeight: 1.5,
+            }}
+          >
+            Select a step node to view details and YAML.
+          </div>
+        )}
+        {/* Import Info */}
+        {data && stepType === "import" && importInfo && (
+          <div style={{ marginBottom: "16px" }}>
+            <MetadataRow label="Source" value={importInfo.sourceName} />
+            <MetadataRow label="Pipeline" value={importInfo.pipelineName} />
+            <MetadataRow
+              label="Type"
+              value={
+                importInfo.sourceSpec.type === "same-repo"
+                  ? "Same Repository"
+                  : "Cross Repository"
+              }
+            />
+            {importInfo.sourceSpec.repoSlug && (
+              <MetadataRow
+                label="Repository"
+                value={importInfo.sourceSpec.repoSlug}
+              />
+            )}
+            {importInfo.sourceSpec.ref && (
+              <MetadataRow label="Ref" value={importInfo.sourceSpec.ref} />
+            )}
+            {importInfo.sourceSpec.filePath && (
+              <MetadataRow
+                label="File Path"
+                value={importInfo.sourceSpec.filePath}
+              />
+            )}
+            <MetadataRow label="Raw Source" value={importInfo.sourceSpec.raw} />
+            {importInfo.error && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  background: token("color.background.warning", "#FFF7D6"),
+                  border: `1px solid ${token("color.border.warning", "#F5CD47")}`,
+                  color: token("color.text.warning", "#974F0C"),
+                  fontSize: "12px",
+                }}
+              >
+                <strong>Error: </strong>
+                {importInfo.error}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Metadata */}
-        {rawStep && (
+        {data && rawStep && (
           <div style={{ marginBottom: "16px" }}>
             {Boolean(rawStep.deployment) && (
               <MetadataRow
@@ -232,7 +324,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({ data, onClose }) => {
         )}
 
         {/* YAML Snippet */}
-        {yamlSnippet && (
+        {data && yamlSnippet && (
           <div>
             <h4
               style={{

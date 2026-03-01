@@ -1,49 +1,154 @@
-import React, { useState } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import ReactDOM from "react-dom/client";
 import "@atlaskit/css-reset";
 import { setGlobalTheme, token } from "@atlaskit/tokens";
 import { PipelinesViewer } from "../src";
-import { MOCK_DATA } from "./mockData";
+import type { ImportSource, ImportResolution } from "../src";
+import { MOCK_DATA, MOCK_SHARED_PIPELINES_YAML } from "./mockData";
+import SourcePanel from "./SourcePanel";
+import type { SourceType } from "./SourcePanel";
+
+const MIN_SIDEBAR_WIDTH = 260;
+const MAX_SIDEBAR_WIDTH = 600;
+const DEFAULT_SIDEBAR_WIDTH = 340;
+const COLLAPSED_STRIP_WIDTH = 32;
 
 const App = () => {
-  const [selectedMockKey, setSelectedMockKey] =
-    useState<keyof typeof MOCK_DATA>("default");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  /* ── Source state ─────────────────────────────────────────────── */
+  const [selectedSampleKey, setSelectedSampleKey] =
+    useState<keyof typeof MOCK_DATA>("default");
   const [customYaml, setCustomYaml] = useState<string>("");
-  const [useCustom, setUseCustom] = useState(false);
+  const [sourceType, setSourceType] = useState<SourceType>("sample");
+  const [sourceFilename, setSourceFilename] = useState<string>("");
 
-  const [showPasteBox, setShowPasteBox] = useState(false);
+  /* ── Sidebar layout state ────────────────────────────────────── */
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isResizingRef = useRef(false);
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
+  useEffect(() => {
     setGlobalTheme({ colorMode: theme });
+  }, [theme]);
+
+  /* ── Derived content ─────────────────────────────────────────── */
+  const yamlContent =
+    sourceType !== "sample" && customYaml.trim()
+      ? customYaml
+      : MOCK_DATA[selectedSampleKey].content;
+
+  const sourceLabel = useMemo(() => {
+    switch (sourceType) {
+      case "sample":
+        return `Sample: ${MOCK_DATA[selectedSampleKey].name}`;
+      case "uploaded":
+        return `Uploaded: ${sourceFilename || "file"}`;
+    }
+  }, [sourceType, selectedSampleKey, sourceFilename]);
+
+  const sampleOptions = useMemo(
+    () =>
+      Object.entries(MOCK_DATA).map(([key, mock]) => ({
+        key,
+        name: mock.name,
+      })),
+    [],
+  );
+
+  /* ── Source panel callbacks ──────────────────────────────────── */
+  const handleSampleChange = useCallback((key: string) => {
+    setSelectedSampleKey(key as keyof typeof MOCK_DATA);
+    setSourceType("sample");
+    setCustomYaml("");
   }, []);
 
-  const handleThemeChange = (newTheme: "light" | "dark") => {
+  const handleFileUpload = useCallback((content: string, filename: string) => {
+    setCustomYaml(content);
+    setSourceType("uploaded");
+    setSourceFilename(filename);
+  }, []);
+
+  /* ── Sidebar resize ─────────────────────────────────────────── */
+  const handleResizeStart = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    isResizingRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const clampedMax = Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - 400);
+      const nextWidth = Math.max(
+        MIN_SIDEBAR_WIDTH,
+        Math.min(event.clientX, Math.max(MIN_SIDEBAR_WIDTH, clampedMax)),
+      );
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  /* ── Mock import resolver ───────────────────────────────────── */
+  const handleResolveImport = useCallback(
+    async (sources: ImportSource[]): Promise<ImportResolution[]> => {
+      await new Promise((r) => setTimeout(r, 500));
+
+      return sources.map((source) => {
+        if (source.name === "shared") {
+          return { source, content: MOCK_SHARED_PIPELINES_YAML };
+        }
+        if (source.name === "local-shared") {
+          return {
+            source,
+            content: `export: true
+pipelines:
+  custom:
+    run-tests:
+      - step:
+          name: Unit Tests
+          script:
+            - npm test
+      - step:
+          name: Integration Tests
+          script:
+            - npm run test:integration
+`,
+          };
+        }
+        if (source.name === "private-repo") {
+          return {
+            source,
+            content: null,
+            error: "Private repository — access denied",
+          };
+        }
+        return { source, content: null, error: "Unknown import source" };
+      });
+    },
+    [],
+  );
+
+  /* ── Theme toggle ───────────────────────────────────────────── */
+  const handleThemeChange = useCallback((newTheme: "light" | "dark") => {
     setTheme(newTheme);
     setGlobalTheme({ colorMode: newTheme });
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result;
-      if (typeof content === "string") {
-        setCustomYaml(content);
-        setUseCustom(true);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const content =
-    useCustom && customYaml.trim()
-      ? customYaml
-      : MOCK_DATA[selectedMockKey].content;
+  }, []);
 
   return (
     <div
@@ -52,43 +157,55 @@ const App = () => {
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         background: token("elevation.surface", "#fff"),
         color: token("color.text", "#172b4d"),
-        minHeight: "100vh",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
       }}
     >
-      {/* Toolbar */}
+      {/* ── Top header bar ─────────────────────────────────────── */}
       <div
         style={{
-          padding: "12px 24px",
-          background: token("elevation.surface.sunken", "#f7f8f9"),
-          borderBottom: `1px solid ${token("color.border", "#dfe1e6")}`,
           display: "flex",
           alignItems: "center",
-          gap: "24px",
-          flexWrap: "wrap",
+          justifyContent: "space-between",
+          padding: "8px 16px",
+          background: token("elevation.surface.sunken", "#f7f8f9"),
+          borderBottom: `1px solid ${token("color.border", "#dfe1e6")}`,
+          flexShrink: 0,
         }}
       >
         <h2
           style={{
             margin: 0,
-            fontSize: "16px",
+            fontSize: "14px",
             fontWeight: 600,
             color: token("color.text", "#172b4d"),
           }}
         >
-          🔧 Bitbucket Pipelines Viewer — Demo
+          Bitbucket Pipelines Viewer — Demo
         </h2>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <label style={{ fontSize: "13px", fontWeight: 500 }}>Theme:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <label
+            htmlFor="theme-select"
+            style={{
+              fontSize: "12px",
+              fontWeight: 500,
+              color: token("color.text.subtle", "#6b778c"),
+            }}
+          >
+            Theme:
+          </label>
           <select
+            id="theme-select"
             aria-label="Theme"
             value={theme}
             onChange={(e) =>
               handleThemeChange(e.target.value as "light" | "dark")
             }
             style={{
-              fontSize: "13px",
-              padding: "2px 8px",
+              fontSize: "12px",
+              padding: "2px 6px",
               background: token("color.background.input", "#fff"),
               color: token("color.text", "#172b4d"),
               border: `1px solid ${token("color.border", "#dfe1e6")}`,
@@ -99,161 +216,46 @@ const App = () => {
             <option value="dark">Dark</option>
           </select>
         </div>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <label style={{ fontSize: "13px", fontWeight: 500 }}>
-            Sample File:
-          </label>
-          <select
-            aria-label="Sample file"
-            value={selectedMockKey}
-            onChange={(e) => {
-              setSelectedMockKey(e.target.value as keyof typeof MOCK_DATA);
-              setUseCustom(false);
-            }}
-            style={{
-              fontSize: "13px",
-              padding: "2px 8px",
-              background: token("color.background.input", "#fff"),
-              color: token("color.text", "#172b4d"),
-              border: `1px solid ${token("color.border", "#dfe1e6")}`,
-              borderRadius: "3px",
-            }}
-          >
-            {Object.entries(MOCK_DATA).map(([key, mock]) => (
-              <option key={key} value={key}>
-                {mock.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* ── Main area: sidebar + viewer ────────────────────────── */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <SourcePanel
+          width={sidebarWidth}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+          onResizeStart={handleResizeStart}
+          selectedSample={selectedSampleKey}
+          sampleOptions={sampleOptions}
+          onSampleChange={handleSampleChange}
+          onFileUpload={handleFileUpload}
+          yamlContent={yamlContent}
+          sourceType={sourceType}
+          sourceLabel={sourceLabel}
+        />
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            onClick={() => {
-              setShowPasteBox(!showPasteBox);
-              if (!showPasteBox) setUseCustom(true);
-            }}
-            style={{
-              fontSize: "12px",
-              padding: "4px 8px",
-              cursor: "pointer",
-              background: showPasteBox
-                ? token("color.background.neutral.subtle", "#ebecf0")
-                : token("color.background.input", "#fff"),
-              color: token("color.text", "#172b4d"),
-              border: `1px solid ${token("color.border", "#dfe1e6")}`,
-              borderRadius: "3px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              fontWeight: showPasteBox ? 600 : 400,
-            }}
-          >
-            <span>📝</span> {showPasteBox ? "Hide Paste Box" : "Paste YAML"}
-          </button>
-
-          <span style={{ color: token("color.border", "#dfe1e6") }}>|</span>
-
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              fontSize: "12px",
-              padding: "4px 8px",
-              cursor: "pointer",
-              background: token("color.background.input", "#fff"),
-              color: token("color.text", "#172b4d"),
-              border: `1px solid ${token("color.border", "#dfe1e6")}`,
-              borderRadius: "3px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            <span>📁</span> Upload YAML
-          </button>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            accept=".yml,.yaml"
-            aria-label="Upload YAML file"
-            onChange={handleFileUpload}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            marginLeft: sidebarCollapsed ? `${COLLAPSED_STRIP_WIDTH}px` : 0,
+          }}
+        >
+          <PipelinesViewer
+            content={yamlContent}
+            height="100%"
+            onError={(err) => console.warn("[Demo] Viewer error:", err)}
+            onResolveImport={handleResolveImport}
           />
         </div>
       </div>
-
-      {/* Custom YAML input */}
-      {showPasteBox && (
-        <div
-          style={{
-            padding: "12px 24px",
-            background: token("color.background.warning", "#fefce8"),
-            borderBottom: `1px solid ${token("color.border", "#dfe1e6")}`,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 600,
-                color: token("color.text.warning", "#856404"),
-              }}
-            >
-              Paste bitbucket-pipelines.yml content:
-            </span>
-            <button
-              onClick={() => setShowPasteBox(false)}
-              style={{
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                fontSize: "16px",
-                padding: "0 4px",
-                color: token("color.text.warning", "#856404"),
-              }}
-              title="Close"
-            >
-              ✕
-            </button>
-          </div>
-          <textarea
-            value={customYaml}
-            onChange={(e) => {
-              setCustomYaml(e.target.value);
-              setUseCustom(true);
-            }}
-            placeholder="Paste your bitbucket-pipelines.yml content here..."
-            style={{
-              width: "100%",
-              minHeight: "150px",
-              fontFamily: "monospace",
-              fontSize: "12px",
-              padding: "8px",
-              border: `1px solid ${token("color.border.warning", "#ffeeba")}`,
-              borderRadius: "4px",
-              resize: "vertical",
-              background: token("color.background.input", "#fff"),
-              color: token("color.text", "#172b4d"),
-            }}
-          />
-        </div>
-      )}
-
-      {/* Viewer */}
-      <PipelinesViewer
-        content={content}
-        height="calc(100vh - 60px)"
-        onError={(err) => console.warn("[Demo] Viewer error:", err)}
-      />
     </div>
   );
 };

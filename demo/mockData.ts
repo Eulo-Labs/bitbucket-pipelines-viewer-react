@@ -714,6 +714,89 @@ pipelines:
                 S3_BUCKET: docs-bucket
                 LOCAL_PATH: docs`;
 
+export const MOCK_IMPORTS = `# Pipeline that uses imports from shared pipelines
+image: node:20-slim
+
+definitions:
+  imports:
+    shared: shared-pipelines:master
+    local-shared: .bitbucket/shared-pipelines.yml
+    private-repo: private-repo:main
+
+pipelines:
+  default:
+    - step:
+        name: Build
+        script:
+          - npm install
+          - npm run build
+
+  branches:
+    main:
+      - import: deploy-to-staging@shared
+    develop:
+      - import: run-tests@local-shared
+    release:
+      - import: deploy-to-prod@private-repo
+
+  custom:
+    manual-deploy:
+      - import: full-deploy@shared
+`;
+
+/** Mock YAML content that would be returned by the shared-pipelines repo */
+export const MOCK_SHARED_PIPELINES_YAML = `export: true
+image: node:20-slim
+
+pipelines:
+  custom:
+    deploy-to-staging:
+      - step:
+          name: Run Tests
+          script:
+            - npm install
+            - npm test
+      - step:
+          name: Build for Staging
+          script:
+            - npm run build:staging
+      - step:
+          name: Deploy to Staging
+          deployment: staging
+          script:
+            - echo "Deploying to staging..."
+            - pipe: atlassian/aws-ecs-deploy:1.9.1
+              variables:
+                CLUSTER_NAME: staging-cluster
+                SERVICE_NAME: my-app-staging
+
+    full-deploy:
+      - step:
+          name: Install & Test
+          script:
+            - npm install
+            - npm test
+      - parallel:
+          - step:
+              name: Lint
+              script:
+                - npm run lint
+          - step:
+              name: Security Scan
+              script:
+                - npm audit
+      - step:
+          name: Build
+          script:
+            - npm run build
+      - step:
+          name: Deploy to Production
+          deployment: production
+          trigger: manual
+          script:
+            - echo "Deploying to production..."
+`;
+
 export const MOCK_DATA = {
   default: {
     name: "Default",
@@ -721,4 +804,5 @@ export const MOCK_DATA = {
   },
   "merge-checks": { name: "Merge Checks", content: MOCK_MERGE_CHECKS },
   "aws-ecs": { name: "AWS ECS Deploy", content: MOCK_AWS_ECS },
+  imports: { name: "With Imports", content: MOCK_IMPORTS },
 };

@@ -3,6 +3,9 @@ import {
   parsePipelines,
   transformStepsToGraph,
   getLayoutedElements,
+  parseImportSource,
+  parseImportDirective,
+  parseImportSources,
 } from "./utils";
 import { PipelineDefinition } from "./types";
 
@@ -305,5 +308,356 @@ describe("getLayoutedElements", () => {
     ]);
     expect(result1.nodes).toHaveLength(1);
     expect(result2.nodes).toHaveLength(2);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Import parsing tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("parseImportSource", () => {
+  it("should parse same-repo filepath (no colon)", () => {
+    const result = parseImportSource(
+      "shared",
+      ".bitbucket/shared-pipelines.yml",
+    );
+    expect(result).toEqual({
+      name: "shared",
+      raw: ".bitbucket/shared-pipelines.yml",
+      type: "same-repo",
+      filePath: ".bitbucket/shared-pipelines.yml",
+    });
+  });
+
+  it("should parse cross-repo with repo:ref format", () => {
+    const result = parseImportSource(
+      "shared-pipelines",
+      "shared-pipelines:master",
+    );
+    expect(result).toEqual({
+      name: "shared-pipelines",
+      raw: "shared-pipelines:master",
+      type: "cross-repo",
+      repoSlug: "shared-pipelines",
+      ref: "master",
+      filePath: "bitbucket-pipelines.yml",
+    });
+  });
+
+  it("should parse cross-repo with repo:ref:filepath format", () => {
+    const result = parseImportSource(
+      "shared",
+      "shared-pipelines:master:.bitbucket/pipelines.yml",
+    );
+    expect(result).toEqual({
+      name: "shared",
+      raw: "shared-pipelines:master:.bitbucket/pipelines.yml",
+      type: "cross-repo",
+      repoSlug: "shared-pipelines",
+      ref: "master",
+      filePath: ".bitbucket/pipelines.yml",
+    });
+  });
+
+  it("should handle filepath with colons in cross-repo format", () => {
+    const result = parseImportSource("s", "repo:main:path:with:colons.yml");
+    expect(result.type).toBe("cross-repo");
+    expect(result.repoSlug).toBe("repo");
+    expect(result.ref).toBe("main");
+    expect(result.filePath).toBe("path:with:colons.yml");
+  });
+});
+
+describe("parseImportDirective", () => {
+  it("should parse valid import directive", () => {
+    const result = parseImportDirective("deploy-to-staging@shared-pipelines");
+    expect(result).toEqual({
+      pipelineName: "deploy-to-staging",
+      sourceAlias: "shared-pipelines",
+    });
+  });
+
+  it("should return null for empty string", () => {
+    expect(parseImportDirective("")).toBeNull();
+  });
+
+  it("should return null for string without @", () => {
+    expect(parseImportDirective("no-at-sign")).toBeNull();
+  });
+
+  it("should return null for string starting with @", () => {
+    expect(parseImportDirective("@source")).toBeNull();
+  });
+
+  it("should return null for string ending with @", () => {
+    expect(parseImportDirective("name@")).toBeNull();
+  });
+
+  it("should handle @ in pipeline name (last @ wins)", () => {
+    const result = parseImportDirective("name@with@at@source");
+    expect(result).toEqual({
+      pipelineName: "name@with@at",
+      sourceAlias: "source",
+    });
+  });
+});
+
+describe("parseImportSources", () => {
+  it("should extract import sources from YAML", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+    local: .bitbucket/shared.yml
+pipelines:
+  default:
+    - step:
+        script:
+          - echo "test"
+`;
+    const result = parseImportSources(yamlStr);
+    expect(result).toHaveLength(2);
+    expect(result[0].name).toBe("shared");
+    expect(result[0].type).toBe("cross-repo");
+    expect(result[1].name).toBe("local");
+    expect(result[1].type).toBe("same-repo");
+  });
+
+  it("should return empty array when no imports", () => {
+    const yamlStr = `
+pipelines:
+  default:
+    - step:
+        script:
+          - echo "test"
+`;
+    expect(parseImportSources(yamlStr)).toEqual([]);
+  });
+
+  it("should return empty array for invalid YAML", () => {
+    expect(parseImportSources("invalid: yaml: :")).toEqual([]);
+  });
+});
+
+describe("parsePipelines with imports", () => {
+  it("should detect import directives and mark as unresolved when no resolver provided", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  branches:
+    main:
+      - import: deploy-to-staging@shared
+`;
+    const result = parsePipelines(yamlStr);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom).toBeDefined();
+    expect(result[0].importedFrom?.sourceName).toBe("shared");
+    expect(result[0].importedFrom?.pipelineName).toBe("deploy-to-staging");
+    expect(result[0].importedFrom?.error).toBe("No resolver provided");
+    expect(result[0].steps).toEqual([]);
+  });
+
+  it("should resolve imports when resolver provides content", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  branches:
+    main:
+      - import: deploy@shared
+`;
+    const importedYaml = `
+export: true
+pipelines:
+  custom:
+    deploy:
+      - step:
+          name: Deploy Step
+          script:
+            - echo "deploying"
+      - step:
+          name: Verify
+          script:
+            - echo "verifying"
+`;
+    const resolvedImports = new Map<string, string>();
+    resolvedImports.set("shared", importedYaml);
+
+    const result = parsePipelines(yamlStr, resolvedImports);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom).toBeDefined();
+    expect(result[0].importedFrom?.error).toBeUndefined();
+    expect(result[0].importedFrom?.sourceName).toBe("shared");
+    expect(result[0].importedFrom?.pipelineName).toBe("deploy");
+    expect(result[0].steps).toHaveLength(2);
+    expect(result[0].steps[0].step?.name).toBe("Deploy Step");
+    expect(result[0].steps[1].step?.name).toBe("Verify");
+  });
+
+  it("should handle missing pipeline name in imported source", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  custom:
+    my-pipeline:
+      - import: nonexistent@shared
+`;
+    const importedYaml = `
+export: true
+pipelines:
+  custom:
+    some-other-pipeline:
+      - step:
+          script:
+            - echo "hello"
+`;
+    const resolvedImports = new Map<string, string>();
+    resolvedImports.set("shared", importedYaml);
+
+    const result = parsePipelines(yamlStr, resolvedImports);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom?.error).toBe(
+      'Pipeline "nonexistent" not found in imported source "shared"',
+    );
+    expect(result[0].steps).toEqual([]);
+  });
+
+  it("should handle import source not defined in definitions.imports", () => {
+    const yamlStr = `
+pipelines:
+  default:
+    - import: deploy@undefined-source
+`;
+    const result = parsePipelines(yamlStr);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom?.error).toBe(
+      'Import source "undefined-source" not found in definitions.imports',
+    );
+  });
+
+  it("should handle invalid import directive format", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  default:
+    - import: no-at-sign
+`;
+    const result = parsePipelines(yamlStr);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom?.error).toContain("Invalid import directive");
+  });
+
+  it("should preserve normal pipelines alongside import pipelines", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  default:
+    - step:
+        name: Normal Step
+        script:
+          - echo "normal"
+  branches:
+    main:
+      - import: deploy@shared
+`;
+    const result = parsePipelines(yamlStr);
+    expect(result).toHaveLength(2);
+    // Default pipeline should be normal
+    expect(result[0].id).toBe("default");
+    expect(result[0].importedFrom).toBeUndefined();
+    expect(result[0].steps).toHaveLength(1);
+    // Branch pipeline should be an import
+    expect(result[1].id).toBe("branch-main");
+    expect(result[1].importedFrom).toBeDefined();
+  });
+
+  it("should handle invalid YAML in imported content", () => {
+    const yamlStr = `
+definitions:
+  imports:
+    shared: shared-pipelines:master
+pipelines:
+  default:
+    - import: deploy@shared
+`;
+    const resolvedImports = new Map<string, string>();
+    resolvedImports.set("shared", "invalid: yaml: :");
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = parsePipelines(yamlStr, resolvedImports);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedFrom?.error).toContain(
+      "Failed to parse imported YAML",
+    );
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("transformStepsToGraph with imports", () => {
+  it("should render an error node for unresolved imports", () => {
+    const pipeline: PipelineDefinition = {
+      id: "branch-main",
+      name: "Branch: main",
+      steps: [],
+      triggerType: "branch",
+      importedFrom: {
+        sourceName: "shared",
+        pipelineName: "deploy",
+        sourceSpec: {
+          name: "shared",
+          raw: "shared-pipelines:master",
+          type: "cross-repo",
+          repoSlug: "shared-pipelines",
+          ref: "master",
+          filePath: "bitbucket-pipelines.yml",
+        },
+        error: 'Could not resolve import from "shared"',
+      },
+    };
+    const { nodes, edges } = transformStepsToGraph(pipeline);
+    // start + import-error + end = 3
+    expect(nodes).toHaveLength(3);
+    expect(edges.length).toBeGreaterThan(0);
+    const importNode = nodes.find((n) => n.id.startsWith("import-error"));
+    expect(importNode).toBeDefined();
+    expect(importNode!.data.stepType).toBe("import");
+    expect(importNode!.data.importInfo?.error).toBeTruthy();
+  });
+
+  it("should render a badge node + steps for resolved imports", () => {
+    const pipeline: PipelineDefinition = {
+      id: "branch-main",
+      name: "Branch: main",
+      steps: [{ step: { name: "Deploy Step", script: ["echo deploy"] } }],
+      triggerType: "branch",
+      importedFrom: {
+        sourceName: "shared",
+        pipelineName: "deploy",
+        sourceSpec: {
+          name: "shared",
+          raw: "shared-pipelines:master",
+          type: "cross-repo",
+          repoSlug: "shared-pipelines",
+          ref: "master",
+          filePath: "bitbucket-pipelines.yml",
+        },
+      },
+    };
+    const { nodes, edges } = transformStepsToGraph(pipeline);
+    // start + badge + step + end = 4
+    expect(nodes).toHaveLength(4);
+    expect(edges.length).toBeGreaterThan(0);
+    const badgeNode = nodes.find((n) => n.id.startsWith("import-badge"));
+    expect(badgeNode).toBeDefined();
+    expect(badgeNode!.data.stepType).toBe("import");
   });
 });
