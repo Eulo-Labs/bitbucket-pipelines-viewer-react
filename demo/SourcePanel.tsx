@@ -198,11 +198,17 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
       </div>
 
       {/* YAML display */}
-      <div className="source-panel__code-area">
+      <div
+        className="source-panel__code-area"
+        tabIndex={0}
+        role="region"
+        aria-label="YAML source code"
+      >
         <SyntaxHighlighter
           language="yaml"
           style={oneDark}
           showLineNumbers
+          lineNumberStyle={{ color: "#9da5b4" }}
           customStyle={{
             margin: 0,
             padding: "12px",

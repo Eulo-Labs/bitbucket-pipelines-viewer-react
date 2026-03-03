@@ -90,6 +90,9 @@ const FullSourceOverlay: React.FC<FullSourceOverlayProps> = ({
         </button>
       </div>
       <div
+        tabIndex={0}
+        role="region"
+        aria-label="Full YAML source code"
         style={{
           flex: 1,
           overflow: "auto",
@@ -100,6 +103,7 @@ const FullSourceOverlay: React.FC<FullSourceOverlayProps> = ({
           language="yaml"
           style={oneDark}
           showLineNumbers
+          lineNumberStyle={{ color: "#9da5b4" }}
           customStyle={{
             margin: 0,
             padding: "24px",

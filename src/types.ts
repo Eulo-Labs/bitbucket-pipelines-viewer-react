@@ -77,6 +77,7 @@ export interface PipelineDefinition {
 /** Data attached to each React Flow node representing a pipeline step. */
 export interface StepNodeData {
   label: React.ReactNode;
+  name?: string;
   rawStep?: PipelineStep;
   yamlSnippet?: string;
   stepType:

@@ -95,7 +95,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
 }) => {
   const stepType = data?.stepType ?? "step";
   const badgeColor = stepTypeBadgeColors[stepType] || stepTypeBadgeColors.step;
-  const label = data?.label ?? "Step details";
+  const title = data?.name ?? "Step details";
   const rawStep = data?.rawStep;
   const importInfo = data?.importInfo;
 
@@ -172,7 +172,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
               whiteSpace: "nowrap",
             }}
           >
-            {label}
+            {title}
           </h3>
           {data && (
             <span
