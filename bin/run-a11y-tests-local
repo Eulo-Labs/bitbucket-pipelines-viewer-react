@@ -14,9 +14,10 @@ done
 
 if [ "$SKIP_BUILD" = false ]; then
   pnpm run build:demo
-  mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
-  cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
 fi
+
+mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
+cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
 
 pnpm exec serve tmp-serve -l 3000 -s &
 sleep 3
