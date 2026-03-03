@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+pnpm run build:demo
+mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
+cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
+pnpm exec serve tmp-serve -l 3000 -s &
+sleep 3
+pnpm run lint:a11y
+pkill -f 'serve tmp-serve'

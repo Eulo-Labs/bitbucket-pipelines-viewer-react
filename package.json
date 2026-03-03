@@ -31,6 +31,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:a11y": "pa11y-ci",
+    "lint:a11y:local": "./bin/run-a11y-tests-local",
     "fixstyle": "prettier '**/*.{ts,tsx,js,jsx,json,md,yaml,yml}' --write",
     "prepare": "husky",
     "publish-patch": "pnpm version patch && git push --follow-tags",
