@@ -40,37 +40,53 @@
     }
 }
 
-/* Resize control buttons to be smaller */
-.react-flow__controls-button {
-    width: 34px !important;
-    height: 34px !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    padding: 0 !important;
+/* Custom toolbar */
+.pv-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--ds-surface, white);
+    border: 1px solid var(--ds-border, #dfe1e6);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
 }
 
-.react-flow__controls-button svg {
-    width: 18px !important;
-    height: 18px !important;
-    max-width: 18px !important;
-    max-height: 18px !important;
+.pv-toolbar button {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    border: none;
+    background: var(--ds-surface, white);
+    fill: var(--ds-icon, #444);
+    color: var(--ds-icon, #444);
+    cursor: pointer;
+}
+
+.pv-toolbar button:hover {
+    background: var(--ds-surface-hovered, #f4f5f7);
+}
+
+.pv-toolbar button svg {
+    width: 18px;
+    height: 18px;
+    max-width: 18px;
+    max-height: 18px;
+}
+
+.pv-toolbar-separator {
+    width: 1px;
+    height: 20px;
+    background: var(--ds-border, #dfe1e6);
+    flex-shrink: 0;
 }
 
 /* Ensure node text follows theme */
 .react-flow__node {
     color: var(--ds-text, #172B4D) !important;
-}
-
-/* Ensure controls symbols have themed color */
-.react-flow__controls-button {
-    background: var(--ds-surface, white) !important;
-    fill: var(--ds-icon, #444) !important;
-    border-bottom: 1px solid var(--ds-border, #eee) !important;
-}
-
-.react-flow__controls-button:hover {
-    background: var(--ds-surface-hovered, #f4f5f7) !important;
 }
 
 /* Ensure attribution follows theme */

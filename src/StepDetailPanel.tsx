@@ -64,7 +64,7 @@ const MetadataRow = ({
     style={{
       display: "flex",
       gap: "8px",
-      padding: "6px 0",
+      padding: "6px 10px",
       borderBottom: `1px solid ${token("color.border", "#ebecf0")}`,
       fontSize: "13px",
     }}
@@ -281,7 +281,15 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
 
         {/* Metadata */}
         {data && rawStep && (
-          <div style={{ marginBottom: "16px" }}>
+          <div
+            style={{
+              marginBottom: "16px",
+              border: `1px solid ${token("color.border", "#ebecf0")}`,
+              borderRadius: "6px",
+              backgroundColor: token("elevation.surface.sunken", "#f7f8f9"),
+              overflow: "hidden",
+            }}
+          >
             {Boolean(rawStep.deployment) && (
               <MetadataRow
                 label="Deployment"

@@ -7,8 +7,6 @@ import React, {
 } from "react";
 import ReactFlow, {
   Background,
-  Controls,
-  ControlButton,
   useNodesState,
   useEdgesState,
   Node,
@@ -54,42 +52,20 @@ export interface PipelinesViewerProps {
 }
 
 const FullscreenIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {/* Northwest arrow */}
-    <polyline points="9 3 3 3 3 9" />
-    <line x1="3" y1="3" x2="10" y2="10" />
-    {/* Southeast arrow */}
-    <polyline points="15 21 21 21 21 15" />
-    <line x1="21" y1="21" x2="14" y2="14" />
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3 3h6v2H5v4H3V3zm12 0h6v6h-2V5h-4V3zM3 15h2v4h4v2H3v-6zm18 0v6h-6v-2h4v-4h2z" />
   </svg>
 );
 
 const ExitFullscreenIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {/* Pointing inward to center from NW */}
-    <polyline points="3 10 10 10 10 3" />
-    <line x1="10" y1="10" x2="3" y2="3" />
-    {/* Pointing inward to center from SE */}
-    <polyline points="21 14 14 14 14 21" />
-    <line x1="14" y1="14" x2="21" y2="21" />
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M9 3v6H3v-2h4V3h2zm6 0h2v4h4v2h-6V3zM3 15h6v6H7v-4H3v-2zm12 0h6v2h-4v4h-2v-6z" />
+  </svg>
+);
+
+const FitToWindowIcon = () => (
+  <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
+    <path d="M800-600v-120H680v-80h120q33 0 56.5 23.5T880-720v120h-80Zm-720 0v-120q0-33 23.5-56.5T160-800h120v80H160v120H80Zm600 440v-80h120v-120h80v120q0 33-23.5 56.5T800-160H680Zm-520 0q-33 0-56.5-23.5T80-240v-120h80v120h120v80H160Zm80-160v-320h480v320H240Zm80-80h320v-160H320v160Zm0 0v-160 160Z" />
   </svg>
 );
 
@@ -117,6 +93,24 @@ const StopIcon = () => (
   </svg>
 );
 
+const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18.3 5.71a1 1 0 0 0-1.42 0L12 10.59 7.12 5.71A1 1 0 0 0 5.7 7.12L10.59 12 5.7 16.88a1 1 0 1 0 1.42 1.42L12 13.41l4.88 4.89a1 1 0 0 0 1.42-1.42L13.41 12l4.89-4.88a1 1 0 0 0 0-1.41Z" />
+  </svg>
+);
+
+const ZoomInIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 32 32" fill="currentColor">
+    <path d="M32 18.133H18.133V32h-4.266V18.133H0v-4.266h13.867V0h4.266v13.867H32z" />
+  </svg>
+);
+
+const ZoomOutIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 32 5" fill="currentColor">
+    <path d="M0 0h32v4.2H0z" />
+  </svg>
+);
+
 const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   content,
   height = "800px",
@@ -133,7 +127,7 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(380);
-  const { fitView } = useReactFlow();
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
 
   const [selectedNode, setSelectedNode] = useState<Node<StepNodeData> | null>(
     null,
@@ -630,30 +624,79 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
           attributionPosition="bottom-right"
         >
           <Background color={token("color.border", "#aaa")} gap={16} />
-          <Controls
-            position="top-right"
-            showInteractive={false}
-            style={{ right: `${sidebarWidth + 12}px`, top: 10 }}
-          >
-            <ControlButton
-              onClick={toggleFullScreen}
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          {/* Centre toolbar */}
+          <Panel position="top-center" style={{ margin: "10px 0 0 0" }}>
+            <div className="pv-toolbar">
+              <button
+                onClick={() => zoomOut({ duration: 200 })}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <ZoomOutIcon />
+              </button>
+              <button
+                onClick={() => zoomIn({ duration: 200 })}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <ZoomInIcon />
+              </button>
+              <div className="pv-toolbar-separator" role="separator" />
+              <button
+                onClick={() =>
+                  fitView({ duration: 400, padding: 0.4, maxZoom: 1.15 })
+                }
+                title="Fit to window"
+                aria-label="Fit to window"
+              >
+                <FitToWindowIcon />
+              </button>
+              <button
+                onClick={toggleFullScreen}
+                title={isFullscreen ? "Exit full screen" : "Full screen"}
+                aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+              >
+                {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+              </button>
+              <div className="pv-toolbar-separator" role="separator" />
+              <button
+                onClick={
+                  animatingStage !== null ? stopAnimation : startAnimation
+                }
+                title={
+                  animatingStage !== null ? "Stop animation" : "Animate flow"
+                }
+                aria-label={
+                  animatingStage !== null ? "Stop animation" : "Animate flow"
+                }
+              >
+                {animatingStage !== null ? <StopIcon /> : <PlayIcon />}
+              </button>
+            </div>
+          </Panel>
+
+          {/* Close button — fullscreen only, shifts left when sidebar is open */}
+          {isFullscreen && (
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                right: selectedNode ? sidebarWidth + 10 : 10,
+                zIndex: 25,
+                transition: "right 0.15s ease",
+              }}
             >
-              {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
-            </ControlButton>
-            <ControlButton
-              onClick={animatingStage !== null ? stopAnimation : startAnimation}
-              title={
-                animatingStage !== null ? "Stop animation" : "Animate flow"
-              }
-              aria-label={
-                animatingStage !== null ? "Stop animation" : "Animate flow"
-              }
-            >
-              {animatingStage !== null ? <StopIcon /> : <PlayIcon />}
-            </ControlButton>
-          </Controls>
+              <div className="pv-toolbar">
+                <button
+                  onClick={toggleFullScreen}
+                  title="Close"
+                  aria-label="Close"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </div>
+          )}
           {((currentOptions && Object.keys(currentOptions).length > 0) ||
             currentGlobalImage) && (
             <Panel
@@ -678,12 +721,14 @@ const PipelinesViewerContent: React.FC<PipelinesViewerProps> = ({
             </Panel>
           )}
         </ReactFlow>
-        <StepDetailPanel
-          data={selectedNode?.data ?? null}
-          width={sidebarWidth}
-          onResizeStart={handleSidebarResizeStart}
-          onClearSelection={() => setSelectedNode(null)}
-        />
+        {selectedNode && (
+          <StepDetailPanel
+            data={selectedNode.data}
+            width={sidebarWidth}
+            onResizeStart={handleSidebarResizeStart}
+            onClearSelection={() => setSelectedNode(null)}
+          />
+        )}
       </div>
     </div>
   );
