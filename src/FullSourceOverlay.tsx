@@ -103,7 +103,7 @@ const FullSourceOverlay: React.FC<FullSourceOverlayProps> = ({
           language="yaml"
           style={oneDark}
           showLineNumbers
-          lineNumberStyle={{ color: "#9da5b4" }}
+          lineNumberStyle={{ color: "#ffffff" }}
           customStyle={{
             margin: 0,
             padding: "24px",

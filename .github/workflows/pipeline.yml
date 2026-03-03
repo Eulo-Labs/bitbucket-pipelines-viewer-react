@@ -79,17 +79,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-puppeteer-
 
-      - name: Serve demo for a11y tests
-        run: |
-          mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
-          cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
-          pnpm exec serve tmp-serve -l 3000 &
-          sleep 5
-
-      - name: Accessibility tests (pa11y-ci)
+      - name: Accessibility tests
         run: |
           pnpm exec puppeteer browsers install chrome
-          pnpm run lint:a11y
+          ./bin/run-a11y-tests-local --skip-build
 
   codeql:
     name: CodeQL Analysis
