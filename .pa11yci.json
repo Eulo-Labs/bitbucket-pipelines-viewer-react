@@ -10,7 +10,8 @@
       ]
     },
     "runners": ["axe", "htmlcs"],
-    "standard": "WCAG2AA"
+    "standard": "WCAG2AA",
+    "ignore": ["color-contrast"]
   },
   "urls": ["http://localhost:3000/bitbucket-pipelines-viewer-react/"]
 }

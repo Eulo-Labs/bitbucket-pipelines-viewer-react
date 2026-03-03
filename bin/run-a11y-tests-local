@@ -19,7 +19,9 @@ fi
 mkdir -p tmp-serve/bitbucket-pipelines-viewer-react
 cp -r dist-demo/* tmp-serve/bitbucket-pipelines-viewer-react/
 
-pnpm exec serve tmp-serve -l 3000 -s &
+pnpm exec http-server tmp-serve -p 3000 --silent &
+SERVER_PID=$!
+cleanup() { kill $SERVER_PID 2>/dev/null; }
+trap cleanup EXIT
 sleep 3
 pnpm run lint:a11y
-pkill -f 'serve tmp-serve'

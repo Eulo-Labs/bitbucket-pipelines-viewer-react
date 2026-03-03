@@ -1,12 +1,9 @@
 import React, { useMemo } from "react";
 import { token } from "@atlaskit/tokens";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
-import yamlLang from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDarkAccessible } from "./oneDarkAccessible";
 import jsYaml from "js-yaml";
 import { StepNodeData } from "./types";
-
-SyntaxHighlighter.registerLanguage("yaml", yamlLang);
 
 interface StepDetailPanelProps {
   data: StepNodeData | null;
@@ -353,7 +350,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
             >
               <SyntaxHighlighter
                 language="yaml"
-                style={oneDark}
+                style={oneDarkAccessible}
                 customStyle={{
                   margin: 0,
                   padding: "12px",

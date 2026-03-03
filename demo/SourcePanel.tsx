@@ -1,7 +1,7 @@
 import React, { useRef, useCallback } from "react";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import yamlLang from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDarkAccessible } from "../src/oneDarkAccessible";
 import "./SourcePanel.css";
 
 SyntaxHighlighter.registerLanguage("yaml", yamlLang);
@@ -206,9 +206,8 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
       >
         <SyntaxHighlighter
           language="yaml"
-          style={oneDark}
+          style={oneDarkAccessible}
           showLineNumbers
-          lineNumberStyle={{ color: "#ffffff" }}
           customStyle={{
             margin: 0,
             padding: "12px",

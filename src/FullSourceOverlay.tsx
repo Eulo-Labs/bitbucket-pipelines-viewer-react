@@ -2,7 +2,7 @@ import React from "react";
 import { token } from "@atlaskit/tokens";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDarkAccessible } from "./oneDarkAccessible";
 
 SyntaxHighlighter.registerLanguage("yaml", yaml);
 
@@ -101,9 +101,8 @@ const FullSourceOverlay: React.FC<FullSourceOverlayProps> = ({
       >
         <SyntaxHighlighter
           language="yaml"
-          style={oneDark}
+          style={oneDarkAccessible}
           showLineNumbers
-          lineNumberStyle={{ color: "#ffffff" }}
           customStyle={{
             margin: 0,
             padding: "24px",
