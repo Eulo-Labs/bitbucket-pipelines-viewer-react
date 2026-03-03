@@ -1,6 +1,6 @@
 # bitbucket-pipelines-viewer-react
 
-[![CI](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml/badge.svg)](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/ci.yml)
+[![CI](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/pipeline.yml/badge.svg)](https://github.com/Eulo-Labs/bitbucket-pipelines-viewer-react/actions/workflows/pipeline.yml)
 [![npm version](https://img.shields.io/npm/v/@eulolabs/bitbucket-pipelines-viewer-react.svg)](https://www.npmjs.com/package/@eulolabs/bitbucket-pipelines-viewer-react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-green.svg)
