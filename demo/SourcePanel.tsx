@@ -208,7 +208,7 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
           language="yaml"
           style={oneDark}
           showLineNumbers
-          lineNumberStyle={{ color: "#9da5b4" }}
+          lineNumberStyle={{ color: "#ffffff" }}
           customStyle={{
             margin: 0,
             padding: "12px",
@@ -217,6 +217,7 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
             minHeight: "100%",
             background: "#282c34",
           }}
+          tabIndex={0}
         >
           {yamlContent}
         </SyntaxHighlighter>
