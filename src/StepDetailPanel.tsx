@@ -1,7 +1,10 @@
 import React, { useMemo } from "react";
 import { token } from "@atlaskit/tokens";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import { oneDarkAccessible } from "./oneDarkAccessible";
+
+SyntaxHighlighter.registerLanguage("yaml", yaml);
 import jsYaml from "js-yaml";
 import { StepNodeData } from "./types";
 

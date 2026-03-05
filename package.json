@@ -1,6 +1,6 @@
 {
   "name": "@eulolabs/bitbucket-pipelines-viewer-react",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "packageManager": "pnpm@10.30.3",
   "description": "Interactive React component for visualizing Bitbucket Pipelines YAML configurations as flow graphs",
   "type": "module",
