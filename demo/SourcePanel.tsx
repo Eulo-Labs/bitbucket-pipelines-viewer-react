@@ -189,6 +189,7 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
           <input
             ref={fileInputRef}
             type="file"
+            data-ph-no-capture="true"
             accept=".yml,.yaml"
             style={{ display: "none" }}
             aria-label="Upload YAML file"
@@ -200,6 +201,7 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
       {/* YAML display */}
       <div
         className="source-panel__code-area"
+        data-ph-no-capture="true"
         tabIndex={0}
         role="region"
         aria-label="YAML source code"
@@ -226,6 +228,7 @@ const SourcePanel: React.FC<SourcePanelProps> = ({
       <div className="source-panel__footer">
         <span
           className={`source-panel__source-badge source-panel__source-badge--${sourceType}`}
+          data-ph-no-capture="true"
         >
           {sourceLabel}
         </span>

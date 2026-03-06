@@ -14,7 +14,6 @@ const posthogAnalyticsPlugin = (): Plugin => ({
       api_host: 'https://eu.i.posthog.com',
       autocapture: {
         element_allowlist: ['a', 'button', 'input', 'select'],
-        css_selector_allowlist: ['[data-ph-capture]'],
       },
       capture_pageview: true,
       capture_pageleave: true,

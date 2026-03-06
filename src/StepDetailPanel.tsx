@@ -350,6 +350,7 @@ const StepDetailPanel: React.FC<StepDetailPanelProps> = ({
                 overflow: "hidden",
                 border: `1px solid ${token("color.border", "#ebecf0")}`,
               }}
+              data-ph-no-capture="true"
             >
               <SyntaxHighlighter
                 language="yaml"
