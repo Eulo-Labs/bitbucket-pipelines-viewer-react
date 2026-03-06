@@ -9,6 +9,7 @@
 Interactive React component for visualizing **bitbucket-pipelines.yml** configurations as flow graphs.
 
 [**Live Demo**](https://Eulo-Labs.github.io/bitbucket-pipelines-viewer-react/)
+[**Try in Bitbucket**](https://marketplace.atlassian.com/apps/2640112035)
 
 ## Features
 
